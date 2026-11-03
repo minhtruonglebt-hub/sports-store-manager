@@ -19,6 +19,7 @@ import vn.sportstore.repository.CustomerRepository;
 import vn.sportstore.repository.OrderDetailRepository;
 import vn.sportstore.repository.OrderRepository;
 import vn.sportstore.repository.ProductRepository;
+import vn.sportstore.repository.StockMovementRepository;
 import vn.sportstore.repository.UserAccountRepository;
 import vn.sportstore.service.StoreService;
 
@@ -50,6 +51,7 @@ class CheckoutAndSecurityIntegrationTest {
     @Autowired private CustomerRepository customers;
     @Autowired private OrderRepository orders;
     @Autowired private OrderDetailRepository orderDetails;
+    @Autowired private StockMovementRepository stockMovements;
     @Autowired private UserAccountRepository userAccounts;
     @Autowired private StoreService store;
 
@@ -81,6 +83,52 @@ class CheckoutAndSecurityIntegrationTest {
         assertEquals(1, result.path("items").size());
         assertEquals(initialStock - quantity, products.findById(product.getId()).orElseThrow().getQuantity());
         assertEquals(initialDetailCount + 1, orderDetails.count());
+        var saleMovement = stockMovements.findTop100ByProduct_IdOrderByCreatedAtDescIdDesc(product.getId()).get(0);
+        assertEquals("SALE", saleMovement.getMovementType());
+        assertEquals(-quantity, saleMovement.getQuantityChange());
+    }
+
+    @Test
+    void staffCanAdjustStockAndViewThresholdAlertsAndMovementHistory() throws Exception {
+        Product product = products.findAll().get(0);
+        int initialStock = product.getQuantity();
+        product.setMinStock(initialStock + 5);
+        products.save(product);
+
+        JsonNode alert = objectMapper.readTree(mockMvc.perform(get("/api/products/low-stock")
+                        .with(user("staff").roles("STAFF")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertTrue(java.util.stream.StreamSupport.stream(alert.path("items").spliterator(), false)
+                .anyMatch(item -> item.path("id").asLong() == product.getId()));
+
+        mockMvc.perform(post("/api/products/{id}/stock-adjustments", product.getId())
+                        .with(user("staff").roles("STAFF"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"quantityChange":3,"reason":"Nhập hàng bổ sung"}
+                                """))
+                .andExpect(status().isOk());
+
+        assertEquals(initialStock + 3, products.findById(product.getId()).orElseThrow().getQuantity());
+        JsonNode history = objectMapper.readTree(mockMvc.perform(get("/api/products/{id}/stock-movements", product.getId())
+                        .with(user("staff").roles("STAFF")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertEquals("ADJUSTMENT", history.get(0).path("movementType").asText());
+        assertEquals(3, history.get(0).path("quantityChange").asInt());
+        assertEquals("Nhập hàng bổ sung", history.get(0).path("reason").asText());
+
+        mockMvc.perform(post("/api/products/{id}/stock-adjustments", product.getId())
+                        .with(user("staff").roles("STAFF"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"quantityChange":-999999,"reason":"Xuất kho"}
+                                """))
+                .andExpect(status().isBadRequest());
+        assertEquals(initialStock + 3, products.findById(product.getId()).orElseThrow().getQuantity());
     }
 
     @Test

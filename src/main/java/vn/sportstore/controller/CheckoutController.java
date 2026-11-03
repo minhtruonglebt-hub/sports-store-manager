@@ -84,8 +84,9 @@ public class CheckoutController {
             detail.setQuantity(quantity); detail.setUnitPrice(product.getPrice()); detail.setSubtotal(subtotal);
             store.details().save(detail);
             product.setQuantity(product.getQuantity() - quantity);
-            if (product.getQuantity() <= 5 && !"Ngừng bán".equals(product.getStatus())) product.setStatus("Sắp hết");
+            if (product.getQuantity() <= product.getMinStock() && !"Ngừng bán".equals(product.getStatus())) product.setStatus("Sắp hết");
             store.products().save(product);
+            store.recordStockMovement(product, -quantity, "SALE", "Bán hàng đơn #" + order.getId(), order.getId());
             total = total.add(subtotal);
         }
         order.setTotalAmount(total);

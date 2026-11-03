@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import vn.sportstore.model.Product;
+import vn.sportstore.model.StockMovement;
 import vn.sportstore.service.ProductImageStorage;
 import vn.sportstore.service.StoreService;
 
@@ -38,6 +39,45 @@ public class ProductController extends CrudControllerSupport<Product> {
     public CollectionModel<EntityModel<Product>> all() {
         return CollectionModel.of(store.products().findAll().stream().map(this::model).toList(),
                 linkTo(methodOn(ProductController.class).all()).withSelfRel());
+    }
+
+    @GetMapping("/low-stock")
+    public Map<String, Object> lowStock() {
+        List<Product> items = store.products().findAll().stream()
+                .filter(product -> product.getQuantity() <= product.getMinStock())
+                .filter(product -> !"Ngừng bán".equals(product.getStatus()))
+                .toList();
+        return Map.of("count", items.size(), "items", items);
+    }
+
+    @GetMapping("/{id}/stock-movements")
+    public List<StockMovement> stockMovements(@PathVariable Long id) {
+        one(store.products(), id);
+        return store.stockMovements().findTop100ByProduct_IdOrderByCreatedAtDescIdDesc(id);
+    }
+
+    @PostMapping("/{id}/stock-adjustments")
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN','STAFF')")
+    public Map<String, Object> adjustStock(@PathVariable Long id, @RequestBody StockAdjustment adjustment) {
+        synchronized (store) {
+            Product product = one(store.products(), id);
+            if (adjustment == null || adjustment.quantityChange() == null
+                    || adjustment.quantityChange() == 0 || Math.abs((long) adjustment.quantityChange()) > 999999)
+                throw bad("Thay đổi tồn kho phải nằm trong khoảng -999999 đến 999999 và khác 0");
+            if (blank(adjustment.reason()) || adjustment.reason().trim().length() > 250)
+                throw bad("Lý do điều chỉnh không được để trống và tối đa 250 ký tự");
+            long newQuantity = (long) product.getQuantity() + adjustment.quantityChange();
+            if (newQuantity < 0 || newQuantity > Integer.MAX_VALUE)
+                throw bad("Tồn kho mới không hợp lệ");
+
+            product.setQuantity((int) newQuantity);
+            updateStockStatus(product);
+            store.products().save(product);
+            store.recordStockMovement(product, adjustment.quantityChange(), "ADJUSTMENT",
+                    adjustment.reason().trim(), null);
+            return Map.of("product", product, "quantityChange", adjustment.quantityChange());
+        }
     }
 
     @GetMapping("/filter")
@@ -99,9 +139,19 @@ public class ProductController extends CrudControllerSupport<Product> {
         p.setCategory(store.categories().findById(p.getCategoryId()).orElseThrow());
         if (p.getPrice() == null || p.getPrice().signum() < 0) throw bad("Giá phải lớn hơn hoặc bằng 0");
         if (p.getQuantity() == null || p.getQuantity() < 0) throw bad("Tồn kho phải lớn hơn hoặc bằng 0");
+        if (p.getMinStock() == null || p.getMinStock() < 0) throw bad("Ngưỡng cảnh báo tồn kho phải lớn hơn hoặc bằng 0");
         if (blank(p.getStatus())) p.setStatus("Đang bán");
     }
     @Override protected void beforeDelete(Product old) {
         if (store.hasDetailsOfProduct(old.getId())) throw conflict("Sản phẩm đã có trong đơn hàng; hãy chuyển sang Ngừng bán");
+        if (store.stockMovements().existsByProduct_Id(old.getId())) throw conflict("Sản phẩm đã có lịch sử tồn kho; hãy chuyển sang Ngừng bán");
     }
+
+    private static void updateStockStatus(Product product) {
+        if ("Ngừng bán".equals(product.getStatus())) return;
+        if (product.getQuantity() <= product.getMinStock()) product.setStatus("Sắp hết");
+        else if ("Sắp hết".equals(product.getStatus())) product.setStatus("Đang bán");
+    }
+
+    public record StockAdjustment(Integer quantityChange, String reason) {}
 }

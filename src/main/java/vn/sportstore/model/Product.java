@@ -19,6 +19,7 @@ public class Product extends BaseEntity {
     @Column(length = 60) private String color;
     @Column(nullable = false, precision = 14, scale = 2) private BigDecimal price;
     @Column(nullable = false) private Integer quantity;
+    @Column(name = "min_stock", nullable = false, columnDefinition = "integer not null default 5") private Integer minStock = 5;
     @Column(length = 30) private String status;
     @Column(length = 500) private String imageUrl;
 

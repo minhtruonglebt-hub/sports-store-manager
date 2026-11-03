@@ -23,6 +23,8 @@ Chạy `mvn test` tại thư mục project để kiểm tra luồng thanh toán,
 - CRUD danh mục, sản phẩm, khách hàng, đơn hàng và chi tiết đơn hàng.
 - Bán hàng tại quầy: giỏ hàng, kiểm tra tồn kho, tạo đơn và cập nhật tồn kho.
 - Lọc sản phẩm theo từ khóa, danh mục, giá và trạng thái; có phân trang.
+- Ngưỡng cảnh báo tồn kho tùy chỉnh theo từng sản phẩm; dashboard hiển thị giá trị tồn kho và danh sách cảnh báo.
+- Nhập/xuất kho có lý do, lịch sử 100 lần thay đổi gần nhất; đơn bán, sửa và hủy cũng được lưu vào lịch sử.
 - Dashboard doanh thu, đơn chờ xử lý, cảnh báo tồn kho và số lượng dữ liệu.
 - Trạng thái backend và kết nối cơ sở dữ liệu được kiểm tra tự động trên dashboard.
 - Đăng nhập theo phiên, phân quyền Admin/Staff, BCrypt và bảo vệ CSRF.
@@ -34,4 +36,6 @@ Chạy `mvn test` tại thư mục project để kiểm tra luồng thanh toán,
 - `src/` — Spring Boot, JPA/Hibernate, REST API và bảo mật.
 - `database/sportiva.sql` — bản SQL có cấu trúc và dữ liệu mẫu.
 
-Các API chính: `/api/health`, `/api/auth/*`, `/api/categories`, `/api/products`, `/api/customers`, `/api/orders`, `/api/order-details`, `/api/checkout`, `/api/dashboard`.
+Các API chính: `/api/health`, `/api/auth/*`, `/api/categories`, `/api/products`, `/api/products/low-stock`, `/api/products/{id}/stock-adjustments`, `/api/products/{id}/stock-movements`, `/api/customers`, `/api/orders`, `/api/order-details`, `/api/checkout`, `/api/dashboard`.
+
+`database/sportiva.sql` là file SQL đầy đủ cho database mới. Khi nâng cấp database đang dùng, Spring Boot với `ddl-auto=update` sẽ thêm cột ngưỡng tồn kho và bảng lịch sử tồn kho khi khởi động.

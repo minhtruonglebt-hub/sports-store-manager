@@ -23,7 +23,7 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
             row.setId(null);
             validate(row);
             ensureOrderCanBeEdited(row.getOrderId());
-            adjustStock(null, row);
+            adjustStock(null, row, "Thêm chi tiết đơn #" + row.getOrderId());
             OrderDetail saved = store.details().save(row);
             store.recalcOrderTotal(saved.getOrderId());
             return saved;
@@ -42,7 +42,7 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
             row.setId(id);
             validate(row);
             ensureOrderCanBeEdited(row.getOrderId());
-            adjustStock(current, row);
+            adjustStock(current, row, "Cập nhật chi tiết đơn #" + row.getOrderId());
 
             OrderDetail saved = store.details().save(row);
             if (!oldOrderId.equals(saved.getOrderId())) store.recalcOrderTotal(oldOrderId);
@@ -59,7 +59,7 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
             OrderDetail current = one(store.details(), id);
             Long orderId = current.getOrderId();
             CustomerOrder order = store.orders().findById(orderId).orElseThrow();
-            if (!"Đã hủy".equals(order.getStatus())) adjustStock(current, null);
+            if (!"Đã hủy".equals(order.getStatus())) adjustStock(current, null, "Xóa chi tiết đơn #" + orderId);
             store.details().deleteById(id);
             store.recalcOrderTotal(orderId);
         }
@@ -84,7 +84,7 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
         if ("Đã hủy".equals(order.getStatus())) throw bad("Không thể thêm hoặc sửa chi tiết của đơn đã hủy");
     }
 
-    private void adjustStock(OrderDetail current, OrderDetail replacement) {
+    private void adjustStock(OrderDetail current, OrderDetail replacement, String reason) {
         Long oldProductId = current == null ? null : current.getProductId();
         int oldQuantity = current == null ? 0 : current.getQuantity();
         Long newProductId = replacement == null ? null : replacement.getProductId();
@@ -98,20 +98,22 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
         if (oldProduct != null && oldProductId.equals(newProductId)) {
             int available = oldProduct.getQuantity() + oldQuantity;
             if (newQuantity > available) throw bad("Không đủ tồn kho cho sản phẩm " + oldProduct.getName());
-            saveStock(oldProduct, available - newQuantity);
+            saveStock(oldProduct, available - newQuantity, reason, current.getOrderId());
             return;
         }
 
         if (newProduct != null && newProduct.getQuantity() < newQuantity)
             throw bad("Không đủ tồn kho cho sản phẩm " + newProduct.getName());
-        if (oldProduct != null) saveStock(oldProduct, oldProduct.getQuantity() + oldQuantity);
-        if (newProduct != null) saveStock(newProduct, newProduct.getQuantity() - newQuantity);
+        if (oldProduct != null) saveStock(oldProduct, oldProduct.getQuantity() + oldQuantity, reason, current.getOrderId());
+        if (newProduct != null) saveStock(newProduct, newProduct.getQuantity() - newQuantity, reason, replacement.getOrderId());
     }
 
-    private void saveStock(Product product, int quantity) {
+    private void saveStock(Product product, int quantity, String reason, Long orderId) {
+        int quantityChange = quantity - product.getQuantity();
         product.setQuantity(quantity);
-        if (quantity <= 5 && !"Ngừng bán".equals(product.getStatus())) product.setStatus("Sắp hết");
-        else if (quantity > 5 && "Sắp hết".equals(product.getStatus())) product.setStatus("Đang bán");
+        if (quantity <= product.getMinStock() && !"Ngừng bán".equals(product.getStatus())) product.setStatus("Sắp hết");
+        else if (quantity > product.getMinStock() && "Sắp hết".equals(product.getStatus())) product.setStatus("Đang bán");
         store.products().save(product);
+        store.recordStockMovement(product, quantityChange, "ORDER_EDIT", reason, orderId);
     }
 }

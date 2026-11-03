@@ -169,6 +169,7 @@ CREATE TABLE `products` (
   `color` varchar(60) DEFAULT NULL,
   `price` decimal(14,2) NOT NULL,
   `quantity` int(11) NOT NULL,
+  `min_stock` int(11) NOT NULL DEFAULT 5,
   `status` varchar(30) DEFAULT NULL,
   `image_url` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -176,7 +177,8 @@ CREATE TABLE `products` (
   KEY `idx_products_name` (`name`),
   CONSTRAINT `fk_products_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON UPDATE CASCADE,
   CONSTRAINT `chk_products_price` CHECK (`price` >= 0),
-  CONSTRAINT `chk_products_quantity` CHECK (`quantity` >= 0)
+  CONSTRAINT `chk_products_quantity` CHECK (`quantity` >= 0),
+  CONSTRAINT `chk_products_min_stock` CHECK (`min_stock` >= 0)
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -186,9 +188,27 @@ CREATE TABLE `products` (
 
 LOCK TABLES `products` WRITE;
 /*!40000 ALTER TABLE `products` DISABLE KEYS */;
-INSERT INTO `products` (`id`,`category_id`,`name`,`brand`,`size`,`color`,`price`,`quantity`,`status`,`image_url`) VALUES (1,1,'Nike Air Zoom Pegasus 40','Nike','42','Đen / Trắng',3290000.00,12,'Đang bán',NULL),(2,2,'Áo chạy bộ Dri-FIT','Nike','L','Xanh navy',890000.00,25,'Đang bán',NULL),(3,3,'Bóng đá Pro Match','SportPro','5','Trắng / Đỏ',650000.00,8,'Sắp hết',NULL),(4,1,'Adidas Ultraboost Light','Adidas','42','Black',3890000.00,9,'Đang bán',NULL),(5,1,'Puma Velocity Nitro 3','Puma','41','Blue',2790000.00,14,'Đang bán',NULL),(6,1,'Mizuno Morelia Neo IV','Mizuno','40','White',3150000.00,6,'Sắp hết',NULL),(7,1,'Jordan One Take 5 Basketball','Jordan','43','Red / Black',2490000.00,11,'Đang bán',NULL),(8,2,'Adidas Home Football Jersey 2025','Adidas','L','Red',1250000.00,20,'Đang bán',NULL),(9,2,'Nike 2-in-1 Running Shorts','Nike','M','Black',790000.00,18,'Đang bán',NULL),(10,2,'Puma Essentials Training Jacket','Puma','XL','Gray',1690000.00,7,'Sắp hết',NULL),(11,2,'Adidas Mid-Crew Sports Socks 3-Pack','Adidas','L','White',290000.00,30,'Đang bán',NULL),(12,3,'Yonex Nanoflare 001 Badminton Racket','Yonex','4U-G5','Navy',1590000.00,10,'Đang bán',NULL),(13,3,'Non-Slip Yoga Mat 6mm','SportPro','183x61cm','Purple',450000.00,16,'Đang bán',NULL),(14,3,'Nike Sport Water Bottle 750ml','Nike','750ml','Clear',390000.00,22,'Đang bán',NULL),(15,3,'Under Armour Pro Grip Gym Gloves','Under Armour','M','Black',590000.00,5,'Sắp hết',NULL);
+INSERT INTO `products` (`id`,`category_id`,`name`,`brand`,`size`,`color`,`price`,`quantity`,`min_stock`,`status`,`image_url`) VALUES (1,1,'Nike Air Zoom Pegasus 40','Nike','42','Đen / Trắng',3290000.00,12,5,'Đang bán',NULL),(2,2,'Áo chạy bộ Dri-FIT','Nike','L','Xanh navy',890000.00,25,5,'Đang bán',NULL),(3,3,'Bóng đá Pro Match','SportPro','5','Trắng / Đỏ',650000.00,8,5,'Sắp hết',NULL),(4,1,'Adidas Ultraboost Light','Adidas','42','Black',3890000.00,9,5,'Đang bán',NULL),(5,1,'Puma Velocity Nitro 3','Puma','41','Blue',2790000.00,14,5,'Đang bán',NULL),(6,1,'Mizuno Morelia Neo IV','Mizuno','40','White',3150000.00,6,5,'Sắp hết',NULL),(7,1,'Jordan One Take 5 Basketball','Jordan','43','Red / Black',2490000.00,11,5,'Đang bán',NULL),(8,2,'Adidas Home Football Jersey 2025','Adidas','L','Red',1250000.00,20,5,'Đang bán',NULL),(9,2,'Nike 2-in-1 Running Shorts','Nike','M','Black',790000.00,18,5,'Đang bán',NULL),(10,2,'Puma Essentials Training Jacket','Puma','XL','Gray',1690000.00,7,5,'Sắp hết',NULL),(11,2,'Adidas Mid-Crew Sports Socks 3-Pack','Adidas','L','White',290000.00,30,5,'Đang bán',NULL),(12,3,'Yonex Nanoflare 001 Badminton Racket','Yonex','4U-G5','Navy',1590000.00,10,5,'Đang bán',NULL),(13,3,'Non-Slip Yoga Mat 6mm','SportPro','183x61cm','Purple',450000.00,16,5,'Đang bán',NULL),(14,3,'Nike Sport Water Bottle 750ml','Nike','750ml','Clear',390000.00,22,5,'Đang bán',NULL),(15,3,'Under Armour Pro Grip Gym Gloves','Under Armour','M','Black',590000.00,5,5,'Sắp hết',NULL);
 /*!40000 ALTER TABLE `products` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `stock_movements`
+--
+
+DROP TABLE IF EXISTS `stock_movements`;
+CREATE TABLE `stock_movements` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `product_id` bigint(20) NOT NULL,
+  `movement_type` varchar(30) NOT NULL,
+  `quantity_change` int(11) NOT NULL,
+  `reason` varchar(250) NOT NULL,
+  `reference_id` bigint(20) DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_stock_movements_product_created` (`product_id`,`created_at`),
+  CONSTRAINT `fk_stock_movements_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

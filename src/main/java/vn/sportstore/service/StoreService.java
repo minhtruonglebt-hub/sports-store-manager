@@ -20,9 +20,12 @@ public class StoreService {
     private final CustomerRepository customers;
     private final OrderRepository orders;
     private final OrderDetailRepository details;
+    private final StockMovementRepository stockMovements;
 
-    public StoreService(CategoryRepository c, ProductRepository p, CustomerRepository u, OrderRepository o, OrderDetailRepository d) {
+    public StoreService(CategoryRepository c, ProductRepository p, CustomerRepository u, OrderRepository o,
+            OrderDetailRepository d, StockMovementRepository stockMovements) {
         categories = c; products = p; customers = u; orders = o; details = d;
+        this.stockMovements = stockMovements;
         seed();
     }
 
@@ -79,7 +82,7 @@ public class StoreService {
 
             if (!"Đã hủy".equals(statuses[i])) {
                 product.setQuantity(product.getQuantity() - 1);
-                if (product.getQuantity() <= 5 && !"Ngừng bán".equals(product.getStatus()))
+                if (product.getQuantity() <= product.getMinStock() && !"Ngừng bán".equals(product.getStatus()))
                     product.setStatus("Sắp hết");
                 products.save(product);
             }
@@ -101,11 +104,32 @@ public class StoreService {
     public CustomerRepository customers() { return customers; }
     public OrderRepository orders() { return orders; }
     public OrderDetailRepository details() { return details; }
+    public StockMovementRepository stockMovements() { return stockMovements; }
+
+    public void recordStockMovement(Product product, int quantityChange, String movementType,
+            String reason, Long referenceId) {
+        if (quantityChange == 0) return;
+        StockMovement movement = new StockMovement();
+        movement.setProduct(product);
+        movement.setMovementType(movementType);
+        movement.setQuantityChange(quantityChange);
+        movement.setReason(reason);
+        movement.setReferenceId(referenceId);
+        movement.setCreatedAt(LocalDateTime.now());
+        stockMovements.save(movement);
+    }
 
     public Map<String, Object> stats() {
         BigDecimal revenue = orders.findAll().stream().filter(o -> !"Đã hủy".equals(o.getStatus()))
                 .map(CustomerOrder::getTotalAmount).filter(v -> v != null).reduce(BigDecimal.ZERO, BigDecimal::add);
-        long lowStock = products.findAll().stream().filter(p -> p.getQuantity() != null && p.getQuantity() <= 5).count();
+        List<Product> allProducts = products.findAll();
+        long lowStock = allProducts.stream()
+                .filter(p -> p.getQuantity() != null && p.getQuantity() <= p.getMinStock())
+                .filter(p -> !"Ngừng bán".equals(p.getStatus())).count();
+        BigDecimal inventoryValue = allProducts.stream()
+                .filter(p -> p.getQuantity() != null && p.getPrice() != null)
+                .map(p -> p.getPrice().multiply(BigDecimal.valueOf(p.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         long pendingOrders = orders.findAll().stream()
                 .filter(o -> !"Hoàn thành".equals(o.getStatus()) && !"Đã hủy".equals(o.getStatus())).count();
         Map<String, Object> result = new LinkedHashMap<>();
@@ -113,6 +137,7 @@ public class StoreService {
         result.put("customers", customers.count()); result.put("orders", orders.count());
         result.put("orderDetails", details.count()); result.put("revenue", revenue);
         result.put("lowStock", lowStock); result.put("pendingOrders", pendingOrders);
+        result.put("inventoryValue", inventoryValue);
         return result;
     }
 
@@ -173,8 +198,10 @@ public class StoreService {
         for (OrderDetail detail : detailsOfOrder(orderId)) {
             products.findById(detail.getProductId()).ifPresent(product -> {
                 product.setQuantity((product.getQuantity() == null ? 0 : product.getQuantity()) + detail.getQuantity());
-                if (product.getQuantity() > 5 && "Sắp hết".equals(product.getStatus())) product.setStatus("Đang bán");
+                if (product.getQuantity() > product.getMinStock() && "Sắp hết".equals(product.getStatus())) product.setStatus("Đang bán");
                 products.save(product);
+                recordStockMovement(product, detail.getQuantity(), "ORDER_RESTORED",
+                        "Khôi phục tồn kho đơn #" + orderId, orderId);
             });
         }
     }

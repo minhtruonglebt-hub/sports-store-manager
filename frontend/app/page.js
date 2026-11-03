@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const resources = {
   categories: { label: "Danh mục", icon: "▦", url: "/api/categories", fields: [["name", "Tên danh mục", "text", true], ["description", "Mô tả", "textarea"]], cols: [["name", "Tên danh mục"], ["description", "Mô tả"]] },
-  products: { label: "Sản phẩm", icon: "◈", url: "/api/products", fields: [["name", "Tên sản phẩm", "text", true], ["categoryId", "Danh mục", "category", true], ["brand", "Thương hiệu", "text"], ["size", "Kích cỡ", "text"], ["color", "Màu sắc", "text"], ["price", "Giá bán (₫)", "number", true], ["quantity", "Tồn kho", "number", true], ["status", "Trạng thái", "productStatus", true]], cols: [["name", "Sản phẩm"], ["categoryId", "Danh mục"], ["brand", "Thương hiệu"], ["size", "Kích cỡ"], ["price", "Giá bán"], ["quantity", "Tồn kho"], ["status", "Trạng thái"]] },
+  products: { label: "Sản phẩm", icon: "◈", url: "/api/products", fields: [["name", "Tên sản phẩm", "text", true], ["categoryId", "Danh mục", "category", true], ["brand", "Thương hiệu", "text"], ["size", "Kích cỡ", "text"], ["color", "Màu sắc", "text"], ["price", "Giá bán (₫)", "number", true], ["quantity", "Tồn kho", "number", true], ["minStock", "Ngưỡng cảnh báo tồn kho", "number", true], ["status", "Trạng thái", "productStatus", true]], cols: [["name", "Sản phẩm"], ["categoryId", "Danh mục"], ["brand", "Thương hiệu"], ["size", "Kích cỡ"], ["price", "Giá bán"], ["quantity", "Tồn kho"], ["minStock", "Cảnh báo từ"], ["status", "Trạng thái"]] },
   customers: { label: "Khách hàng", icon: "♙", url: "/api/customers", fields: [["fullName", "Họ và tên", "text", true], ["phone", "Số điện thoại", "tel"], ["email", "Email", "email"], ["address", "Địa chỉ", "textarea"]], cols: [["fullName", "Khách hàng"], ["phone", "Điện thoại"], ["email", "Email"], ["address", "Địa chỉ"]] },
   orders: { label: "Đơn hàng", icon: "▤", url: "/api/orders", fields: [["customerId", "Khách hàng", "customer", true], ["orderDate", "Ngày đặt", "datetime-local", true], ["status", "Trạng thái", "orderStatus", true], ["totalAmount", "Tổng tiền (₫)", "number", true], ["shippingAddress", "Địa chỉ giao hàng", "textarea"], ["paymentMethod", "Thanh toán", "text"], ["paymentStatus", "Trạng thái thanh toán", "text"]], cols: [["id", "Mã đơn"], ["customerId", "Khách hàng"], ["orderDate", "Ngày đặt"], ["status", "Trạng thái"], ["totalAmount", "Tổng tiền"], ["paymentStatus", "Thanh toán"]] },
   details: { label: "Chi tiết đơn", icon: "≡", url: "/api/order-details", fields: [["orderId", "Đơn hàng", "order", true], ["productId", "Sản phẩm", "product", true], ["quantity", "Số lượng", "number", true], ["unitPrice", "Đơn giá (₫)", "number", true], ["subtotal", "Thành tiền (₫)", "number", true]], cols: [["id", "Mã CT"], ["orderId", "Mã đơn"], ["productId", "Sản phẩm"], ["quantity", "Số lượng"], ["unitPrice", "Đơn giá"], ["subtotal", "Thành tiền"]] },
@@ -41,6 +41,8 @@ export default function Home() {
   const [pageSize, setPageSize] = useState(10);
   const [filteredProducts, setFilteredProducts] = useState(null);
   const [modal, setModal] = useState(null);
+  const [stockProduct, setStockProduct] = useState(null);
+  const [stockHistory, setStockHistory] = useState(null);
   const [cart, setCart] = useState({});
   const [saleCustomer, setSaleCustomer] = useState("");
   const [saleAddress, setSaleAddress] = useState("");
@@ -169,7 +171,7 @@ export default function Home() {
     setError("");
     const value = row ? { ...row } : {};
     if (key === "orders" && !row) { value.orderDate = localDateTime(); value.status = "Chờ xác nhận"; value.totalAmount = 0; }
-    if (key === "products" && !row) value.status = "Đang bán";
+    if (key === "products" && !row) { value.status = "Đang bán"; value.minStock = 5; }
     if (key === "details" && !row) value.quantity = 1;
     if (key === "users" && !row) { value.role = "STAFF"; value.enabled = true; }
     if (key === "users") value.password = "";
@@ -219,6 +221,32 @@ export default function Home() {
     finally { setBusy(false); }
   }
 
+  async function adjustStock(event) {
+    event.preventDefault();
+    if (!stockProduct) return;
+    const form = new FormData(event.currentTarget);
+    setBusy(true); setError("");
+    try {
+      await api(`/api/products/${stockProduct.id}/stock-adjustments`, {
+        method: "POST",
+        body: JSON.stringify({ quantityChange: Number(form.get("quantityChange")), reason: form.get("reason") }),
+      });
+      setStockProduct(null);
+      notify("Đã cập nhật tồn kho và lưu lịch sử.");
+      await refreshData();
+    } catch (e) { setError(e.message || "Không thể điều chỉnh tồn kho."); }
+    finally { setBusy(false); }
+  }
+
+  async function openStockHistory(product) {
+    setBusy(true); setError("");
+    try {
+      const movements = await api(`/api/products/${product.id}/stock-movements`);
+      setStockHistory({ product, movements });
+    } catch (e) { setError(e.message || "Không tải được lịch sử tồn kho."); }
+    finally { setBusy(false); }
+  }
+
   async function checkout() {
     const items = Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId: Number(productId), quantity: Number(quantity) }));
     if (!saleCustomer || !items.length) { notify("Chọn khách hàng và thêm sản phẩm trước khi tạo đơn"); return; }
@@ -238,7 +266,7 @@ export default function Home() {
     const q = query.trim().toLocaleLowerCase("vi");
     return list.filter((item) => {
       const matchesQuery = !q || JSON.stringify(item).toLocaleLowerCase("vi").includes(q);
-      const matchesStatus = page !== "products" || statusFilter === "all" || (statusFilter === "Sắp hết" ? Number(item.quantity) <= 10 : item.status === statusFilter);
+      const matchesStatus = page !== "products" || statusFilter === "all" || (statusFilter === "Sắp hết" ? Number(item.quantity) <= Number(item.minStock ?? 5) : item.status === statusFilter);
       const matchesCategory = page !== "products" || !categoryFilter || String(item.categoryId) === categoryFilter;
       const matchesMin = page !== "products" || !minPrice || Number(item.price) >= Number(minPrice);
       const matchesMax = page !== "products" || !maxPrice || Number(item.price) <= Number(maxPrice);
@@ -251,7 +279,7 @@ export default function Home() {
     : matchingRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 
   const heading = page === "dashboard" ? "Tổng quan" : page === "checkout" ? "Bán hàng" : resources[page]?.label;
-  const lowStock = data.products.filter((product) => Number(product.quantity) <= 5 && product.status !== "Ngừng bán");
+  const lowStock = data.products.filter((product) => Number(product.quantity) <= Number(product.minStock ?? 5) && product.status !== "Ngừng bán");
 
   if (!account) return <LoginPage onSubmit={login} error={error} busy={busy} />;
 
@@ -276,8 +304,8 @@ export default function Home() {
             <div className="panel-header"><div><h2>{page === "products" ? "Danh sách sản phẩm" : `Danh sách ${heading.toLowerCase()}`}</h2><span className="panel-caption">Dữ liệu đồng bộ trực tiếp với MariaDB</span></div><div className="table-tools"><input className="search-input" value={query} onChange={(e) => { setQuery(e.target.value); setPageIndex(0); }} placeholder="⌕ Tìm kiếm..." aria-label="Tìm kiếm" />
               {page === "products" && <><select className="select-filter" aria-label="Lọc trạng thái" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPageIndex(0); }}><option value="all">Mọi trạng thái</option>{statusOptions.productStatus.map((s) => <option key={s}>{s}</option>)}</select><select className="select-filter" aria-label="Lọc danh mục" value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPageIndex(0); }}><option value="">Mọi danh mục</option>{data.categories.map((c) => <option value={c.id} key={c.id}>{c.name}</option>)}</select><input className="small-filter" aria-label="Giá từ" type="number" min="0" placeholder="Giá từ" value={minPrice} onChange={(e) => { setMinPrice(e.target.value); setPageIndex(0); }} /><input className="small-filter" aria-label="Giá đến" type="number" min="0" placeholder="Giá đến" value={maxPrice} onChange={(e) => { setMaxPrice(e.target.value); setPageIndex(0); }} /></>}
             </div></div>
-            <div className="table-scroll"><table><thead><tr>{resources[page].cols.map(([key, label]) => <th key={key}>{label}</th>)}{isAdmin && <th className="action-head">Thao tác</th>}</tr></thead><tbody>
-              {loading ? <tr><td className="empty-cell" colSpan={resources[page].cols.length + (isAdmin ? 1 : 0)}>Đang tải dữ liệu…</td></tr> : visibleRows.length ? visibleRows.map((row) => <tr key={row.id}>{resources[page].cols.map(([key]) => <td key={key}>{renderCell(key, row, page, data)}</td>)}{isAdmin && <td><div className="row-actions">{page === "products" && <label className="icon-button upload-image-button" title="Tải ảnh sản phẩm">▧<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadProductImage(row, file); event.target.value = ""; }} /></label>}<button className="icon-button" title="Chỉnh sửa" onClick={() => openEditor(page, row)}>✎</button><button className="icon-button danger-icon" title="Xóa" onClick={() => deleteEntity(page, row)}>⌫</button></div></td>}</tr>) : <tr><td className="empty-cell" colSpan={resources[page].cols.length + (isAdmin ? 1 : 0)}>{query || categoryFilter || minPrice || maxPrice || statusFilter !== "all" ? "Không tìm thấy dữ liệu phù hợp." : "Chưa có dữ liệu. Nhấn Thêm mới để bắt đầu."}</td></tr>}
+            <div className="table-scroll"><table><thead><tr>{resources[page].cols.map(([key, label]) => <th key={key}>{label}</th>)}{(isAdmin || page === "products") && <th className="action-head">Thao tác</th>}</tr></thead><tbody>
+              {loading ? <tr><td className="empty-cell" colSpan={resources[page].cols.length + (isAdmin || page === "products" ? 1 : 0)}>Đang tải dữ liệu…</td></tr> : visibleRows.length ? visibleRows.map((row) => <tr key={row.id}>{resources[page].cols.map(([key]) => <td key={key}>{renderCell(key, row, page, data)}</td>)}{(isAdmin || page === "products") && <td><div className="row-actions">{page === "products" && <><button className="icon-button" title="Điều chỉnh tồn kho" aria-label={`Điều chỉnh tồn kho ${row.name}`} disabled={busy} onClick={() => setStockProduct(row)}>±</button><button className="icon-button" title="Xem lịch sử tồn kho" aria-label={`Lịch sử tồn kho ${row.name}`} disabled={busy} onClick={() => openStockHistory(row)}>◷</button>{isAdmin && <label className="icon-button upload-image-button" title="Tải ảnh sản phẩm">▧<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadProductImage(row, file); event.target.value = ""; }} /></label>}</>}{isAdmin && <><button className="icon-button" title="Chỉnh sửa" onClick={() => openEditor(page, row)}>✎</button><button className="icon-button danger-icon" title="Xóa" onClick={() => deleteEntity(page, row)}>⌫</button></>}</div></td>}</tr>) : <tr><td className="empty-cell" colSpan={resources[page].cols.length + (isAdmin || page === "products" ? 1 : 0)}>{query || categoryFilter || minPrice || maxPrice || statusFilter !== "all" ? "Không tìm thấy dữ liệu phù hợp." : "Chưa có dữ liệu. Nhấn Thêm mới để bắt đầu."}</td></tr>}
             </tbody></table></div>
             <div className="panel-footer"><span>Hiển thị {visibleRows.length} / {totalRows} mục</span><div className="pagination-controls"><label>Hiển thị <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPageIndex(0); }}><option>10</option><option>25</option><option>50</option></select></label><button disabled={pageIndex <= 0} onClick={() => setPageIndex((n) => Math.max(0, n - 1))}>‹</button><span>Trang {totalRows ? pageIndex + 1 : 0} / {Math.ceil(totalRows / pageSize)}</span><button disabled={(pageIndex + 1) * pageSize >= totalRows} onClick={() => setPageIndex((n) => n + 1)}>›</button></div></div>
           </section>}
@@ -285,6 +313,8 @@ export default function Home() {
         </div>
       </section>
       {modal && <EntityModal modal={modal} data={data} busy={busy} error={error} onClose={() => { setModal(null); setError(""); }} onSave={saveEntity} />}
+      {stockProduct && <StockAdjustmentModal product={stockProduct} busy={busy} error={error} onClose={() => { setStockProduct(null); setError(""); }} onSave={adjustStock} />}
+      {stockHistory && <StockHistoryModal product={stockHistory.product} movements={stockHistory.movements} onClose={() => setStockHistory(null)} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </main>
   );
@@ -302,6 +332,7 @@ function Dashboard({ data, metrics, revenueReport, lowStock, loading, onOpenProd
     ["Sắp hết hàng", metrics?.lowStock ?? lowStock.length, "⚠", "Kiểm tra tồn kho"],
     ["Sản phẩm", metrics?.products ?? data.products.length, "◈", "Đang quản lý"],
     ["Khách hàng", metrics?.customers ?? data.customers.length, "♙", "Đang quản lý"],
+    ["Giá trị tồn kho", money(metrics?.inventoryValue ?? 0), "₫", "Theo giá bán hiện tại"],
   ];
   const latest = [...data.products].slice(-6).reverse();
   const peakRevenue = Math.max(1, ...revenueReport.map((item) => Number(item.revenue)));
@@ -325,7 +356,7 @@ function Dashboard({ data, metrics, revenueReport, lowStock, loading, onOpenProd
         })}
       </div> : <div className="empty-box">Chưa có dữ liệu doanh thu trong khoảng thời gian này.</div>}
     </section>
-    <section className="panel"><div className="panel-header"><div><h2>Sản phẩm mới cập nhật</h2><span className="panel-caption">Hàng hóa trong kho thể thao</span></div><button className="button subtle" onClick={onOpenProducts}>Xem tất cả ↗</button></div><div className="table-scroll"><table><thead><tr><th>Sản phẩm</th><th>Danh mục</th><th>Thương hiệu</th><th>Giá bán</th><th>Tồn kho</th><th>Trạng thái</th></tr></thead><tbody>{loading ? <tr><td className="empty-cell" colSpan="6">Đang tải dữ liệu…</td></tr> : latest.length ? latest.map((product) => <tr key={product.id}><td><ProductName product={product} /></td><td>{data.categories.find((c) => c.id === product.categoryId)?.name || "—"}</td><td>{product.brand || "—"}</td><td>{money(product.price)}</td><td>{product.quantity}</td><td><StatusBadge value={product.status} quantity={product.quantity} /></td></tr>) : <tr><td className="empty-cell" colSpan="6">Chưa có sản phẩm. Thêm mặt hàng đầu tiên để bắt đầu.</td></tr>}</tbody></table></div><div className="panel-footer">{data.products.length} sản phẩm trong hệ thống</div></section>
+    <section className="panel"><div className="panel-header"><div><h2>Sản phẩm mới cập nhật</h2><span className="panel-caption">Hàng hóa trong kho thể thao</span></div><button className="button subtle" onClick={onOpenProducts}>Xem tất cả ↗</button></div><div className="table-scroll"><table><thead><tr><th>Sản phẩm</th><th>Danh mục</th><th>Thương hiệu</th><th>Giá bán</th><th>Tồn kho</th><th>Trạng thái</th></tr></thead><tbody>{loading ? <tr><td className="empty-cell" colSpan="6">Đang tải dữ liệu…</td></tr> : latest.length ? latest.map((product) => <tr key={product.id}><td><ProductName product={product} /></td><td>{data.categories.find((c) => c.id === product.categoryId)?.name || "—"}</td><td>{product.brand || "—"}</td><td>{money(product.price)}</td><td>{product.quantity}</td><td><StatusBadge value={product.status} quantity={product.quantity} minStock={product.minStock} /></td></tr>) : <tr><td className="empty-cell" colSpan="6">Chưa có sản phẩm. Thêm mặt hàng đầu tiên để bắt đầu.</td></tr>}</tbody></table></div><div className="panel-footer">{data.products.length} sản phẩm trong hệ thống</div></section>
   </>;
 }
 
@@ -382,6 +413,34 @@ function Checkout({ data, cart, setCart, saleCustomer, setSaleCustomer, saleAddr
   </>;
 }
 
+function StockAdjustmentModal({ product, busy, error, onClose, onSave }) {
+  return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="stock-modal-title">
+      <header className="modal-header"><div><span className="eyebrow">QUẢN LÝ TỒN KHO</span><h2 id="stock-modal-title">Điều chỉnh {product.name}</h2></div><button className="icon-button" onClick={onClose} aria-label="Đóng">×</button></header>
+      <form onSubmit={onSave}>
+        <div className="form-grid">
+          <label className="form-field">Thay đổi số lượng<input name="quantityChange" type="number" step="1" required autoFocus aria-describedby="stock-change-help" /><small id="stock-change-help">Số dương để nhập hàng, số âm để xuất hàng. Hiện có {product.quantity} sản phẩm.</small></label>
+          <label className="form-field full">Lý do điều chỉnh<input name="reason" type="text" maxLength="250" required /></label>
+        </div>
+        {error && <div className="form-error" role="alert">{error}</div>}
+        <footer className="modal-actions"><button type="button" className="button subtle" onClick={onClose}>Hủy</button><button type="submit" className="button primary" disabled={busy}>{busy ? "Đang lưu…" : "Cập nhật tồn kho"}</button></footer>
+      </form>
+    </section>
+  </div>;
+}
+
+function StockHistoryModal({ product, movements, onClose }) {
+  return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="stock-history-title">
+      <header className="modal-header"><div><span className="eyebrow">TỐI ĐA 100 LẦN GẦN NHẤT</span><h2 id="stock-history-title">Lịch sử tồn kho · {product.name}</h2></div><button className="icon-button" onClick={onClose} aria-label="Đóng">×</button></header>
+      <div className="table-scroll"><table><thead><tr><th>Thời gian</th><th>Loại</th><th>Thay đổi</th><th>Lý do</th></tr></thead><tbody>
+        {movements.length ? movements.map((movement) => <tr key={movement.id}><td>{new Date(movement.createdAt).toLocaleString("vi-VN")}</td><td>{movement.movementType}</td><td>{movement.quantityChange > 0 ? "+" : ""}{movement.quantityChange}</td><td>{movement.reason}</td></tr>) : <tr><td className="empty-cell" colSpan="4">Chưa có lịch sử tồn kho.</td></tr>}
+      </tbody></table></div>
+      <footer className="modal-actions"><button type="button" className="button subtle" onClick={onClose}>Đóng</button></footer>
+    </section>
+  </div>;
+}
+
 function EntityModal({ modal, data, busy, error, onClose, onSave }) {
   const config = resources[modal.key];
   return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header className="modal-header"><div><span className="eyebrow">{modal.row ? "CẬP NHẬT THÔNG TIN" : "THÊM DỮ LIỆU MỚI"}</span><h2 id="modal-title">{modal.row ? "Chỉnh sửa " : "Thêm "}{config.label.toLowerCase()}</h2></div><button className="icon-button" onClick={onClose} aria-label="Đóng">×</button></header><form onSubmit={onSave}><div className="form-grid">{config.fields.map(([key, label, type, required]) => <label className={type === "textarea" ? "form-field full" : "form-field"} key={key}>{label}{renderInput(key, label, type, required && !(key === "password" && modal.row), modal.value[key], data)}</label>)}</div>{error && <div className="form-error" role="alert">{error}</div>}<footer className="modal-actions"><button type="button" className="button subtle" onClick={onClose}>Hủy</button><button type="submit" className="button primary" disabled={busy}>{busy ? "Đang lưu…" : "Lưu thông tin"}</button></footer></form></section></div>;
@@ -396,7 +455,7 @@ function renderInput(key, label, type, required, value, data) {
   const choices = type === "category" ? data.categories.map((x) => [x.id, x.name]) : type === "customer" ? data.customers.map((x) => [x.id, x.fullName]) : type === "product" ? data.products.map((x) => [x.id, x.name]) : type === "order" ? data.orders.map((x) => [x.id, `Đơn #${x.id}`]) : null;
   if (choices) return <select {...common}><option value="">Chọn {label.toLowerCase()}</option>{choices.map(([id, text]) => <option value={id} key={id}>{text}</option>)}</select>;
   const isPassword = type === "password";
-  return <input {...common} type={type} autoComplete={isPassword ? "new-password" : undefined} minLength={isPassword ? 12 : undefined} min={type === "number" ? "0" : undefined} step={type === "number" ? "any" : undefined} maxLength={type === "text" || isPassword ? 200 : undefined} />;
+  return <input {...common} type={type} autoComplete={isPassword ? "new-password" : undefined} minLength={isPassword ? 12 : undefined} min={type === "number" ? "0" : undefined} step={type === "number" ? (key === "quantity" || key === "minStock" ? "1" : "any") : undefined} maxLength={type === "text" || isPassword ? 200 : undefined} />;
 }
 
 function renderCell(key, row, page, data) {
@@ -408,14 +467,14 @@ function renderCell(key, row, page, data) {
   if (key === "productId") return data.products.find((item) => item.id === row[key])?.name || `#${row[key] || "—"}`;
   if (key === "orderId") return `#${row[key] || "—"}`;
   if (["price", "totalAmount", "unitPrice", "subtotal"].includes(key)) return money(row[key]);
-  if (key === "status") return <StatusBadge value={row[key]} quantity={row.quantity} />;
+  if (key === "status") return <StatusBadge value={row[key]} quantity={row.quantity} minStock={row.minStock} />;
   if (key === "orderDate") return row[key] ? new Date(row[key]).toLocaleDateString("vi-VN") : "—";
   return row[key] ?? "—";
 }
 function ProductName({ product }) { return <div className="product-name"><span className="product-thumb">{product.imageUrl ? <img src={product.imageUrl} alt="" /> : "👟"}</span><span><strong>{product.name}</strong><small>SKU-{String(product.id).padStart(4, "0")}</small></span></div>; }
-function StatusBadge({ value, quantity }) {
-  const low = value === "Sắp hết" || (quantity != null && Number(quantity) <= 10);
+function StatusBadge({ value, quantity, minStock = 5 }) {
+  const low = value === "Sắp hết" || (quantity != null && Number(quantity) <= Number(minStock ?? 5));
   const text = low && value === "Đang bán" ? "Sắp hết" : value || "Đang bán";
   return <span className={`badge ${low ? "warning" : value === "Ngừng bán" || value === "Đã hủy" ? "muted-badge" : "success"}`}>{text}</span>;
 }
-function lowStockMessage(products) { const low = products.filter((p) => Number(p.quantity) <= 5 && p.status !== "Ngừng bán"); return low.length ? `${low.length} mặt hàng sắp hết: ${low.slice(0, 4).map((p) => p.name).join(", ")}` : ""; }
+function lowStockMessage(products) { const low = products.filter((p) => Number(p.quantity) <= Number(p.minStock ?? 5) && p.status !== "Ngừng bán"); return low.length ? `${low.length} mặt hàng sắp hết: ${low.slice(0, 4).map((p) => p.name).join(", ")}` : ""; }
