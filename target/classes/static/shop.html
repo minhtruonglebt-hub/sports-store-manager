@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sportiva | Cửa hàng thể thao</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--green:#176b4d;--lime:#d9f36a;--ink:#172821;--muted:#75837b;--line:#e7ece8;--bg:#f6f8f5}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px 'DM Sans',sans-serif}
+    button,input,select{font:inherit}button{cursor:pointer}.top{height:70px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 max(calc((100vw - 1200px)/2),24px)}
+    .brand{display:flex;align-items:center;gap:10px;font:800 17px Manrope;color:var(--ink);text-decoration:none}.logo{width:36px;height:36px;border-radius:12px;background:var(--green);color:var(--lime);display:grid;place-items:center}
+    .top-actions{display:flex;align-items:center;gap:14px}.top-actions a{color:var(--green);font-weight:700;text-decoration:none}.account{color:var(--muted);font-size:12px}
+    .button{border:0;border-radius:9px;padding:11px 15px;font-weight:700}.primary{background:var(--green);color:white}.primary:hover{background:#10573d}.light{background:#edf3ef;color:var(--green)}
+    .wrap{max-width:1200px;margin:auto;padding:30px 24px 60px}.hero{background:#e8f4ed;border-radius:18px;padding:32px 38px;margin-bottom:24px}.eyebrow{color:var(--green);font-size:11px;letter-spacing:1.3px;font-weight:800}.hero h1{font:800 30px Manrope;margin:8px 0}.hero p{margin:0;color:#5e7166}
+    .layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}.section-title{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px}.section-title h2{font:800 19px Manrope;margin:0}.search{border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:min(270px,52vw);background:white}
+    .products{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:14px}.product,.box{background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden}.product-image{height:170px;background:#eef2ef;display:grid;place-items:center;color:#9aa59f;font-size:42px}.product-image img{width:100%;height:100%;object-fit:cover}.product-info{padding:14px}.product-info small{color:var(--muted)}.product-info h3{font:700 14px Manrope;min-height:38px;margin:6px 0}.product-meta{color:var(--muted);font-size:11px;min-height:18px}.product-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:12px}.price{font-weight:800;color:var(--green)}.stock{font-size:10px;color:var(--muted)}.product .button{width:100%;margin-top:12px;padding:9px}.product .button:disabled{background:#e9ece9;color:#87928b;cursor:not-allowed}
+    .box{padding:17px;margin-bottom:16px}.box h2{font:800 16px Manrope;margin:0 0 13px}.cart-line{display:grid;grid-template-columns:1fr auto;gap:5px;padding:10px 0;border-bottom:1px solid #f0f3f0}.cart-line small{color:var(--muted)}.cart-controls{display:flex;align-items:center;gap:6px}.cart-controls button{border:1px solid var(--line);background:#fff;border-radius:6px;width:26px;height:26px}.cart-total{display:flex;justify-content:space-between;font:800 16px Manrope;padding:14px 0}.checkout-fields{display:grid;gap:10px}.checkout-fields label{font-size:11px;font-weight:700;display:grid;gap:5px}.checkout-fields input,.checkout-fields select{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:white}.checkout-fields .button{width:100%}.notice{font-size:11px;line-height:1.5;color:var(--muted);margin:0}.orders{margin-top:25px}.order{background:white;border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:10px}.order-head{display:flex;justify-content:space-between;gap:8px;font-weight:700}.order small{color:var(--muted)}.order-items{font-size:12px;margin:10px 0}.empty{padding:35px;text-align:center;color:var(--muted)}.message{margin:0 0 12px;color:#a33;font-size:12px;min-height:16px}
+    .auth-screen{position:fixed;inset:0;z-index:5;background:#10231d66;display:grid;place-items:center;padding:18px}.auth-card{position:relative;width:min(440px,100%);max-height:95vh;overflow:auto;background:white;border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:0 18px 55px #14251f18}.auth-card h1{font:800 24px Manrope;margin:12px 0 5px}.auth-card p{color:var(--muted);line-height:1.5}.tabs{display:flex;gap:8px;margin:18px 0 12px}.tabs button{flex:1}.auth-form{display:grid;gap:11px}.auth-form[hidden]{display:none}.auth-form label{font-size:11px;font-weight:700}.auth-form input{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;margin-top:5px}.auth-foot{font-size:11px;color:var(--muted);margin-top:14px}.auth-close{position:absolute;right:17px;top:17px;border:0;border-radius:7px;background:#f0f3f0;width:32px;height:32px;font-size:18px}#app[hidden],[hidden]{display:none!important}
+    @media(max-width:850px){.layout{grid-template-columns:1fr}.cart-column{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{margin:0}}
+    @media(max-width:560px){.top{padding:0 14px;height:60px}.account{display:none}.wrap{padding:18px 12px 40px}.hero{padding:23px 20px}.hero h1{font-size:24px}.section-title{align-items:flex-start;gap:10px;flex-direction:column}.search{width:100%}.products{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.product-image{height:125px}.product-info{padding:10px}.cart-column{display:block}.box{margin-bottom:12px}}
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/shop.html"><span class="logo">S</span><span>SPORTIVA<span style="color:var(--green)">.</span></span></a>
+    <div class="top-actions"><span class="account" id="accountName"></span><a href="#orders">Đơn hàng</a><button class="button light" id="openLogin" type="button">Đăng nhập</button><button class="button light" id="logout" type="button" hidden>Đăng xuất</button></div>
+  </header>
+  <main id="app" class="wrap">
+    <section class="hero"><span class="eyebrow">SPORTIVA STORE</span><h1>Chọn đồ thể thao bạn yêu thích</h1><p>Sản phẩm chính hãng, đặt hàng trực tuyến và theo dõi đơn hàng tại đây.</p></section>
+    <div class="layout">
+      <section>
+        <div class="section-title"><h2>Sản phẩm</h2><input id="search" class="search" type="search" placeholder="Tìm tên sản phẩm hoặc thương hiệu" aria-label="Tìm sản phẩm"></div>
+        <div id="products" class="products"></div>
+        <section class="orders" id="orders"><div class="section-title"><h2>Đơn hàng của tôi</h2></div><div id="orderList" class="empty">Đăng nhập để xem đơn hàng của bạn.</div></section>
+      </section>
+      <aside class="cart-column">
+        <section class="box"><h2>Giỏ hàng</h2><div id="cartLines" class="empty">Chưa có sản phẩm</div><div class="cart-total"><span>Tổng cộng</span><span id="total">0 ₫</span></div>
+          <div class="checkout-fields"><label>Địa chỉ nhận hàng<input id="address" maxlength="500" required placeholder="Số nhà, đường, quận/huyện, tỉnh/thành"></label><label>Thanh toán<select id="payment"><option value="COD">Thanh toán khi nhận hàng (COD)</option><option value="BANK_TRANSFER">Chuyển khoản</option></select></label><p class="notice">Đơn hàng sẽ được cửa hàng xác nhận. Chuyển khoản chỉ được ghi nhận sau khi cửa hàng xác nhận.</p><p id="checkoutError" class="message"></p><button id="checkout" class="button primary" type="button">Đặt hàng</button></div>
+        </section>
+        <section class="box"><h2>Tài khoản</h2><div id="customerInfo" class="notice">Bạn có thể xem sản phẩm trước. Đăng nhập hoặc tạo tài khoản để đặt hàng và theo dõi đơn.</div></section>
+      </aside>
+    </div>
+  </main>
+  <section id="authScreen" class="auth-screen" hidden>
+    <div class="auth-card"><button id="closeAuth" class="auth-close" type="button" aria-label="Đóng">×</button><span class="logo">S</span><h1>Cửa hàng Sportiva</h1><p>Đăng nhập hoặc tạo tài khoản để đặt hàng và xem đơn hàng của bạn.</p>
+      <div class="tabs"><button class="button primary" id="loginTab" type="button">Đăng nhập</button><button class="button light" id="registerTab" type="button">Tạo tài khoản</button></div>
+      <form id="loginForm" class="auth-form"><label>Tên đăng nhập<input name="username" autocomplete="username" maxlength="40" required></label><label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="200" required></label><p id="loginError" class="message"></p><button class="button primary" type="submit">Đăng nhập</button></form>
+      <form id="registerForm" class="auth-form" hidden><label>Họ và tên<input name="fullName" maxlength="150" autocomplete="name" required></label><label>Email<input name="email" type="email" maxlength="160" autocomplete="email" required></label><label>Số điện thoại (không bắt buộc)<input name="phone" maxlength="20" autocomplete="tel"></label><label>Tên đăng nhập<input name="username" minlength="3" maxlength="40" pattern="[A-Za-z0-9._-]{3,40}" autocomplete="username" required></label><label>Mật khẩu (ít nhất 12 ký tự, tối đa 72 byte)<input name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label><label>Nhập lại mật khẩu<input name="confirmPassword" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label><p id="registerError" class="message"></p><button class="button primary" type="submit">Tạo tài khoản khách hàng</button></form>
+      <div class="auth-foot">Trang mua sắm dành cho khách hàng. Tài khoản quản trị/nhân viên dùng tại <a href="/">trang quản lý</a>.</div>
+    </div>
+  </section>
+  <script src="/shop.js" defer></script>
+</body>
+</html>

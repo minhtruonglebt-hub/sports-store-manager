@@ -11,6 +11,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
+import vn.sportstore.service.CustomerAccountService;
 
 import java.util.Map;
 
@@ -19,14 +20,23 @@ import java.util.Map;
 public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository contextRepository;
+    private final CustomerAccountService customerAccounts;
 
-    public AuthController(AuthenticationManager authenticationManager, SecurityContextRepository contextRepository) {
+    public AuthController(AuthenticationManager authenticationManager, SecurityContextRepository contextRepository,
+            CustomerAccountService customerAccounts) {
         this.authenticationManager = authenticationManager;
         this.contextRepository = contextRepository;
+        this.customerAccounts = customerAccounts;
     }
 
     @GetMapping("/csrf")
     public Map<String, String> csrf(CsrfToken token) { return Map.of("token", token.getToken()); }
+
+    @PostMapping("/customer/register")
+    public CustomerAccountService.RegistrationResult registerCustomer(
+            @RequestBody CustomerAccountService.RegistrationRequest request) {
+        return customerAccounts.register(request);
+    }
 
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody LoginRequest body, HttpServletRequest request, HttpServletResponse response) {

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sportiva | Đơn khách đặt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--green:#176b4d;--lime:#d9f36a;--ink:#172821;--muted:#75837b;--line:#e7ece8;--bg:#f6f8f5}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px 'DM Sans',sans-serif}
+    button,select{font:inherit}button{cursor:pointer}.top{height:68px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 max(calc((100vw - 1200px)/2),24px)}
+    .brand{display:flex;align-items:center;gap:10px;font:800 17px Manrope;color:var(--ink);text-decoration:none}.logo{width:36px;height:36px;border-radius:12px;background:var(--green);color:var(--lime);display:grid;place-items:center}
+    .top-actions{display:flex;align-items:center;gap:15px}.top-actions a{color:var(--green);font-weight:700;text-decoration:none}.account{font-size:12px;color:var(--muted)}
+    .wrap{max-width:1200px;margin:auto;padding:30px 24px 60px}.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:15px;margin-bottom:22px}.eyebrow{color:var(--green);font-size:11px;letter-spacing:1.3px;font-weight:800}.hero h1{font:800 28px Manrope;margin:7px 0 5px}.hero p{margin:0;color:var(--muted)}
+    .button{border:0;border-radius:8px;padding:10px 13px;font-weight:700}.primary{background:var(--green);color:#fff}.primary:hover{background:#10573d}.primary:disabled{background:#c9d4cd;cursor:not-allowed}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.stat,.order{background:white;border:1px solid var(--line);border-radius:12px}.stat{padding:15px 18px;color:var(--muted);font-size:12px}.stat strong{display:block;color:var(--ink);font:800 22px Manrope;margin-top:5px}
+    .toolbar{display:flex;gap:10px;justify-content:space-between;margin-bottom:13px}.search,.filter{border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 12px}.search{width:min(360px,100%)}.filter{min-width:170px}
+    .order{padding:18px;margin-bottom:12px}.order-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.order-number{font:800 16px Manrope}.order-date,.muted{color:var(--muted);font-size:12px;margin-top:4px}.badge{display:inline-block;background:#fff4dc;color:#93691e;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700}.badge.done{background:#e8f4ed;color:var(--green)}.badge.cancelled{background:#f1f2f1;color:#6b756f}
+    .order-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:17px 0}.info{background:#f8faf8;border-radius:9px;padding:12px}.info b{display:block;font-size:11px;color:#66746c;margin-bottom:6px}.info div{line-height:1.55}.items{width:100%;border-collapse:collapse}.items th,.items td{text-align:left;padding:9px 10px;border-bottom:1px solid #eef1ee}.items th{font-size:10px;color:var(--muted);font-weight:700}.items td{font-size:12px}.items th:last-child,.items td:last-child{text-align:right}.order-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}.total{font:800 17px Manrope;color:var(--green)}.status-control{display:flex;align-items:center;gap:8px}.status-control select{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fff}.empty,.error{background:#fff;border:1px solid var(--line);border-radius:12px;padding:35px;text-align:center;color:var(--muted)}.error{color:#a33}
+    @media(max-width:650px){.top{padding:0 12px}.account{display:none}.wrap{padding:22px 12px 40px}.hero{align-items:flex-start;flex-direction:column}.hero h1{font-size:24px}.summary{gap:7px}.stat{padding:12px 10px;font-size:10px}.stat strong{font-size:19px}.toolbar{flex-direction:column}.search,.filter{width:100%}.order{padding:13px}.order-grid{grid-template-columns:1fr}.order-footer{align-items:flex-start;flex-direction:column}.status-control{width:100%;flex-wrap:wrap}.items th,.items td{padding:8px 5px}}
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/"><span class="logo">S</span><span>SPORTIVA<span style="color:var(--green)">.</span></span></a>
+    <div class="top-actions"><span class="account" id="account"></span><a href="/">Về trang quản lý</a></div>
+  </header>
+  <main class="wrap">
+    <section class="hero">
+      <div><span class="eyebrow">SPORTIVA · QUẢN LÝ CỬA HÀNG</span><h1>Đơn khách đặt</h1><p>Xem thông tin khách hàng, sản phẩm và cập nhật trạng thái đơn trực tuyến.</p></div>
+      <button id="refresh" class="button primary" type="button">Làm mới</button>
+    </section>
+    <section class="summary" aria-label="Thống kê đơn khách đặt">
+      <div class="stat">Tổng đơn trực tuyến<strong id="totalOrders">0</strong></div>
+      <div class="stat">Chờ xác nhận<strong id="pendingOrders">0</strong></div>
+      <div class="stat">Đang giao<strong id="shippingOrders">0</strong></div>
+    </section>
+    <div class="toolbar"><input id="search" class="search" type="search" placeholder="Tìm mã đơn, tên, email, số điện thoại"><select id="statusFilter" class="filter"><option value="">Tất cả trạng thái</option><option>Chờ xác nhận</option><option>Đang xử lý</option><option>Đang giao</option><option>Hoàn thành</option><option>Đã hủy</option></select></div>
+    <section id="orders" aria-live="polite"><div class="empty">Đang tải đơn hàng...</div></section>
+  </main>
+  <script src="/admin/orders.js" defer></script>
+</body>
+</html>

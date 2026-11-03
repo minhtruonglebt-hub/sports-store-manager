@@ -3,6 +3,8 @@
   const originalRender = render;
   const originalDashboard = dashboard;
   const originalShow = show;
+  cfg.products.fields.push(['minStock', 'Ngưỡng cảnh báo tồn kho', 'number']);
+  cfg.products.cols.push(['minStock', 'Cảnh báo từ']);
   let account = null;
   let productPage = 0;
   let cart = new Map();
@@ -29,6 +31,8 @@
     .page-controls{display:flex;gap:8px;align-items:center}.page-controls button{border:1px solid #e7ece8;background:white;border-radius:7px;padding:5px 9px}
     .staff-mode #add{display:none!important}.staff-mode .actions{display:none!important}
     .stock-alert{background:#fff5df;color:#92631b;padding:10px 13px;border-radius:9px;margin:0 0 14px;font-size:12px}
+    .inventory-actions{display:flex;gap:6px;min-width:132px}.inventory-actions button{border:1px solid #e7ece8;border-radius:7px;background:#fff;padding:6px 8px;color:#53635a;font-size:11px}
+    .inventory-notice{display:none;background:#fff5df;color:#92631b;padding:12px 15px;border-radius:10px;margin-bottom:14px;font-size:12px}
     @media(max-width:800px){.sales-grid{grid-template-columns:1fr}}
   `;
   document.head.append(style);
@@ -45,6 +49,11 @@
   salesButton.addEventListener('click', () => show('checkout'));
   navArea.append(salesButton);
 
+  const onlineOrdersButton = document.createElement('button');
+  onlineOrdersButton.innerHTML = '<span class="ico">▣</span><span class="nav-label">Đơn khách đặt</span>';
+  onlineOrdersButton.addEventListener('click', () => { window.location.href = '/admin/orders.html'; });
+  navArea.append(onlineOrdersButton);
+
   const profile = document.querySelector('.profile');
   if (profile) {
     profile.innerHTML = '<span class="avatar" id="userAvatar">?</span><div class="profile-info"><b id="userName">Chưa đăng nhập</b><small id="userRole">—</small></div><button id="logoutButton" class="logout" type="button">Thoát</button>';
@@ -52,6 +61,9 @@
   }
 
   const panel = document.querySelector('.panel');
+  const inventoryNotice = document.createElement('div');
+  inventoryNotice.className = 'inventory-notice';
+  panel.before(inventoryNotice);
   const salesView = document.createElement('section');
   salesView.id = 'salesView'; salesView.className = 'sales-view';
   salesView.innerHTML = `<div id="stockAlert"></div><div class="sales-grid"><div class="sales-box"><div class="panel-head" style="padding:0 0 12px"><h2>Sản phẩm có thể bán</h2><input id="saleSearch" class="search" placeholder="Tìm sản phẩm / thương hiệu" aria-label="Tìm sản phẩm"></div><div id="saleProducts" class="sales-products"></div></div><div class="sales-box"><h2 style="font:700 16px Manrope;margin:0">Giỏ hàng</h2><div id="cartLines" class="muted" style="margin-top:8px">Chưa có mặt hàng</div><div class="cart-total"><span>Tổng tiền</span><span id="cartTotal">0 ₫</span></div><div class="sale-controls"><label>Khách hàng<select id="saleCustomer" required></select></label><label>Địa chỉ giao hàng<input id="saleAddress" maxlength="300" placeholder="Để trống dùng địa chỉ khách hàng"></label><label>Phương thức thanh toán<select id="paymentMethod"><option value="COD">COD — thu tiền khi giao</option><option value="BANK_TRANSFER">Chuyển khoản — chờ xác nhận</option><option value="MOMO_DEMO">MoMo (mô phỏng)</option><option value="CARD_DEMO">Thẻ (mô phỏng)</option></select></label><p class="payment-note">MoMo và thẻ chỉ mô phỏng luồng thanh toán phục vụ đồ án; không kết nối ngân hàng và không thu tiền thật.</p><button id="checkoutButton" class="btn primary" type="button">Tạo đơn hàng</button></div></div></div>`;
@@ -88,6 +100,10 @@
     const result = await response.json(); csrf = result.token;
   }
   function setAccount(info) {
+    if (info.roles.includes('CUSTOMER')) {
+      window.location.replace('/shop.html');
+      return;
+    }
     account = info;
     document.body.classList.toggle('staff-mode', !info.roles.includes('ADMIN'));
     document.getElementById('userName').textContent = info.username;
@@ -99,6 +115,10 @@
     try {
       await loadCsrf();
       const me = await api('/api/auth/me');
+      if (me.roles.includes('CUSTOMER')) {
+        window.location.replace('/shop.html');
+        return;
+      }
       setAccount(me); await refresh();
     } catch { auth.hidden = false; }
   }
@@ -109,7 +129,12 @@
     try {
       await loadCsrf();
       const info = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(formData)) });
-      document.getElementById('loginForm').reset(); setAccount(info); await refresh(); notify('Đăng nhập thành công');
+      document.getElementById('loginForm').reset();
+      if (info.roles.includes('CUSTOMER')) {
+        window.location.replace('/shop.html');
+        return;
+      }
+      setAccount(info); await refresh(); notify('Đăng nhập thành công');
     } catch (error) { document.getElementById('loginError').textContent = error.message || 'Đăng nhập thất bại'; }
   });
   async function logout() {
@@ -127,11 +152,15 @@
       stats.innerHTML = [
         ['Doanh thu đơn hàng', money(data.revenue), '₫'], ['Đơn hàng', data.orders, '▤'],
         ['Chờ xử lý', data.pendingOrders, '◷'], ['Sắp hết hàng', data.lowStock, '⚠'],
-        ['Sản phẩm', data.products, '◈'], ['Khách hàng', data.customers, '♙']
+        ['Sản phẩm', data.products, '◈'], ['Khách hàng', data.customers, '♙'],
+        ['Giá trị tồn kho', money(data.inventoryValue), '₫']
       ].map(item => `<div class="stat"><div class="stat-head">${item[0]}<span class="stat-icon">${item[2]}</span></div><strong>${item[1]}</strong><small>Thông tin hiện tại</small></div>`).join('');
-      const low = (rows.products || []).filter(p => Number(p.quantity) <= 5 && p.status !== 'Ngừng bán');
+      const low = await api('/api/products/low-stock');
+      inventoryNotice.style.display = current === 'dashboard' && low.count ? 'block' : 'none';
+      inventoryNotice.textContent = low.count
+        ? `⚠ ${low.count} sản phẩm đang ở ngưỡng tồn kho hoặc thấp hơn. Mở Sản phẩm để nhập thêm hàng hoặc xem lịch sử.`
+        : '';
       document.getElementById('stockAlert').innerHTML = '';
-      if (low.length && current === 'dashboard') notify(`Có ${low.length} sản phẩm sắp hết hàng`);
     } catch (error) { notify(error.message); }
   };
 
@@ -147,7 +176,9 @@
       const result = await api('/api/products/filter?' + params.toString());
       const products = result.items;
       head.innerHTML = '<tr>' + cfg.products.cols.map(col => `<th>${col[1]}</th>`).join('') + '<th>Thao tác</th></tr>';
-      body.innerHTML = products.length ? products.map(product => '<tr>' + cfg.products.cols.map(([key]) => `<td>${cell(key, product)}</td>`).join('') + `<td><div class="actions"><button class="icon" onclick="openForm(${product.id})">✎</button><button class="icon" onclick="removeRow(${product.id})">⌫</button></div></td></tr>`).join('') : `<tr><td colspan="${cfg.products.cols.length + 1}" class="empty">Không có sản phẩm phù hợp bộ lọc.</td></tr>`;
+      body.innerHTML = products.length ? products.map(product => '<tr>' + cfg.products.cols.map(([key]) => `<td>${cell(key, product)}</td>`).join('') + `<td><div class="actions"><button class="icon" onclick="openForm(${product.id})">✎</button><button class="icon" onclick="removeRow(${product.id})">⌫</button></div><div class="inventory-actions"><button type="button" data-stock-adjust="${product.id}">± Nhập/xuất</button><button type="button" data-stock-history="${product.id}">Lịch sử</button></div></td></tr>`).join('') : `<tr><td colspan="${cfg.products.cols.length + 1}" class="empty">Không có sản phẩm phù hợp bộ lọc.</td></tr>`;
+      body.querySelectorAll('[data-stock-adjust]').forEach(button => button.addEventListener('click', () => adjustStock(Number(button.dataset.stockAdjust))));
+      body.querySelectorAll('[data-stock-history]').forEach(button => button.addEventListener('click', () => showStockHistory(Number(button.dataset.stockHistory))));
       count.textContent = `Tổng ${result.total} sản phẩm`;
       pageControls.innerHTML = `<button type="button" ${result.page <= 0 ? 'disabled' : ''} id="prevProductPage">‹</button><span>Trang ${result.totalPages ? result.page + 1 : 0} / ${result.totalPages}</span><button type="button" ${result.page + 1 >= result.totalPages ? 'disabled' : ''} id="nextProductPage">›</button>`;
       document.getElementById('prevProductPage')?.addEventListener('click', () => { productPage--; render(); });
@@ -170,6 +201,7 @@
     if (key !== 'checkout') {
       salesView.style.display = 'none'; stats.style.display = ''; panel.style.display = '';
       filters.style.display = key === 'products' ? 'flex' : 'none'; pageControls.style.display = key === 'products' ? 'flex' : 'none';
+      inventoryNotice.style.display = 'none';
       originalShow(key); if (key === 'products') { populateCategories(); render(); }
       return;
     }
@@ -183,6 +215,35 @@
       rows.products = extract(p); rows.customers = extract(c); renderSale();
     }).catch(error => notify(error.message));
   };
+
+  async function adjustStock(productId) {
+    const quantityChange = prompt('Nhập số lượng thay đổi (số dương để nhập hàng, số âm để xuất hàng):');
+    if (quantityChange === null) return;
+    if (!/^-?\d+$/.test(quantityChange.trim()) || Number(quantityChange) === 0) {
+      notify('Vui lòng nhập số nguyên khác 0.');
+      return;
+    }
+    const reason = prompt('Lý do điều chỉnh tồn kho:');
+    if (reason === null) return;
+    try {
+      await api(`/api/products/${productId}/stock-adjustments`, {
+        method: 'POST',
+        body: JSON.stringify({ quantityChange: Number(quantityChange), reason })
+      });
+      notify('Đã cập nhật tồn kho và lưu lịch sử.');
+      await refresh();
+    } catch (error) { notify(error.message); }
+  }
+
+  async function showStockHistory(productId) {
+    try {
+      const movements = await api(`/api/products/${productId}/stock-movements`);
+      const text = movements.length
+        ? movements.map(item => `${new Date(item.createdAt).toLocaleString('vi-VN')} | ${item.quantityChange > 0 ? '+' : ''}${item.quantityChange} | ${item.movementType} | ${item.reason}`).join('\n')
+        : 'Chưa có lịch sử điều chỉnh tồn kho.';
+      alert(`Lịch sử tồn kho gần đây (tối đa 100 lần):\n\n${text}`);
+    } catch (error) { notify(error.message); }
+  }
 
   function renderSale() {
     const query = document.getElementById('saleSearch').value.toLowerCase();

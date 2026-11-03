@@ -20,6 +20,7 @@ public class CustomerOrder extends BaseEntity {
     @Column(length = 500) private String shippingAddress;
     @Column(length = 30) private String paymentMethod;
     @Column(length = 80) private String paymentStatus;
+    @Column(name = "order_source", length = 20) private String orderSource = "STORE";
 
     public Long getCustomerId() { return customer != null ? customer.getId() : customerId; }
     public void setCustomerId(Long customerId) { this.customerId = customerId; }

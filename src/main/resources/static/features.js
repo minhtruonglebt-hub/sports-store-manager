@@ -49,6 +49,11 @@
   salesButton.addEventListener('click', () => show('checkout'));
   navArea.append(salesButton);
 
+  const onlineOrdersButton = document.createElement('button');
+  onlineOrdersButton.innerHTML = '<span class="ico">▣</span><span class="nav-label">Đơn khách đặt</span>';
+  onlineOrdersButton.addEventListener('click', () => { window.location.href = '/admin/orders.html'; });
+  navArea.append(onlineOrdersButton);
+
   const profile = document.querySelector('.profile');
   if (profile) {
     profile.innerHTML = '<span class="avatar" id="userAvatar">?</span><div class="profile-info"><b id="userName">Chưa đăng nhập</b><small id="userRole">—</small></div><button id="logoutButton" class="logout" type="button">Thoát</button>';
@@ -95,6 +100,10 @@
     const result = await response.json(); csrf = result.token;
   }
   function setAccount(info) {
+    if (info.roles.includes('CUSTOMER')) {
+      window.location.replace('/shop.html');
+      return;
+    }
     account = info;
     document.body.classList.toggle('staff-mode', !info.roles.includes('ADMIN'));
     document.getElementById('userName').textContent = info.username;
@@ -106,6 +115,10 @@
     try {
       await loadCsrf();
       const me = await api('/api/auth/me');
+      if (me.roles.includes('CUSTOMER')) {
+        window.location.replace('/shop.html');
+        return;
+      }
       setAccount(me); await refresh();
     } catch { auth.hidden = false; }
   }
@@ -116,7 +129,12 @@
     try {
       await loadCsrf();
       const info = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(formData)) });
-      document.getElementById('loginForm').reset(); setAccount(info); await refresh(); notify('Đăng nhập thành công');
+      document.getElementById('loginForm').reset();
+      if (info.roles.includes('CUSTOMER')) {
+        window.location.replace('/shop.html');
+        return;
+      }
+      setAccount(info); await refresh(); notify('Đăng nhập thành công');
     } catch (error) { document.getElementById('loginError').textContent = error.message || 'Đăng nhập thất bại'; }
   });
   async function logout() {

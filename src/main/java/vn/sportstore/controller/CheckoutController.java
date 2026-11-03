@@ -2,11 +2,14 @@ package vn.sportstore.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import vn.sportstore.model.CustomerOrder;
 import vn.sportstore.model.OrderDetail;
 import vn.sportstore.model.Product;
+import vn.sportstore.model.UserAccount;
+import vn.sportstore.repository.UserAccountRepository;
 import vn.sportstore.service.StoreService;
 
 import java.math.BigDecimal;
@@ -18,19 +21,41 @@ import java.util.*;
 public class CheckoutController {
     private static final Set<String> METHODS = Set.of("COD", "BANK_TRANSFER", "MOMO_DEMO", "CARD_DEMO");
     private final StoreService store;
+    private final UserAccountRepository users;
 
-    public CheckoutController(StoreService store) { this.store = store; }
+    public CheckoutController(StoreService store, UserAccountRepository users) {
+        this.store = store;
+        this.users = users;
+    }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
     @org.springframework.transaction.annotation.Transactional
     public Map<String, Object> checkout(@RequestBody CheckoutRequest request) {
         synchronized (store) {
-            return checkoutLocked(request);
+            return checkoutLocked(request, false);
         }
     }
 
-    private Map<String, Object> checkoutLocked(CheckoutRequest request) {
+    @PostMapping("/customer")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> customerCheckout(@RequestBody CheckoutRequest request, Authentication authentication) {
+        if (request == null) throw bad("Đơn hàng không hợp lệ");
+        UserAccount account = users.findByUsernameIgnoreCase(authentication.getName())
+                .orElseThrow(() -> bad("Tài khoản khách hàng không hợp lệ"));
+        if (account.getCustomer() == null) throw bad("Tài khoản chưa liên kết hồ sơ khách hàng");
+        if (request.shippingAddress() == null || request.shippingAddress().isBlank()
+                || request.shippingAddress().trim().length() > 500)
+            throw bad("Vui lòng nhập địa chỉ giao hàng (tối đa 500 ký tự)");
+        CheckoutRequest customerRequest = new CheckoutRequest(account.getCustomer().getId(),
+                request.shippingAddress(), request.paymentMethod(), request.items());
+        synchronized (store) {
+            return checkoutLocked(customerRequest, true);
+        }
+    }
+
+    private Map<String, Object> checkoutLocked(CheckoutRequest request, boolean onlineOrder) {
         if (request == null || request.customerId() == null || store.customers().findById(request.customerId()).isEmpty())
             throw bad("Vui lòng chọn khách hàng hợp lệ");
         if (request.items() == null || request.items().isEmpty() || request.items().size() > 50)
@@ -65,6 +90,7 @@ public class CheckoutController {
                 ? store.customers().findById(request.customerId()).orElseThrow().getAddress()
                 : request.shippingAddress().trim());
         order.setPaymentMethod(method);
+        order.setOrderSource(onlineOrder ? "ONLINE" : "STORE");
         order.setPaymentStatus(switch (method) {
             case "COD" -> "Chờ thu tiền khi giao hàng";
             case "BANK_TRANSFER" -> "Chờ xác nhận chuyển khoản";

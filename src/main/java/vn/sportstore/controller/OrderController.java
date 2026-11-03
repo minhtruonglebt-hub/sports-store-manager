@@ -1,18 +1,67 @@
 package vn.sportstore.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import vn.sportstore.model.OrderDetail;
+import vn.sportstore.model.Product;
 import vn.sportstore.model.CustomerOrder;
+import vn.sportstore.repository.OrderDetailRepository;
 import vn.sportstore.service.StoreService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.List;
 
 @RestController @RequestMapping("/api/orders")
 public class OrderController extends CrudControllerSupport<CustomerOrder> {
     private final StoreService store;
-    public OrderController(StoreService store) { this.store = store; }
+    private final OrderDetailRepository orderDetails;
+    public OrderController(StoreService store, OrderDetailRepository orderDetails) {
+        this.store = store;
+        this.orderDetails = orderDetails;
+    }
     @GetMapping public List<CustomerOrder> all() { return all(store.orders()); }
+    @GetMapping("/online")
+    @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<OnlineOrderView> onlineOrders() {
+        return store.orders().findAll().stream()
+                .filter(order -> "ONLINE".equals(order.getOrderSource()))
+                .sorted((first, second) -> second.getOrderDate().compareTo(first.getOrderDate()))
+                .map(order -> {
+                    var customer = order.getCustomer();
+                    List<OnlineOrderItemView> items = orderDetails.findAllByOrder_Id(order.getId()).stream()
+                            .map(this::onlineOrderItem).toList();
+                    return new OnlineOrderView(order.getId(), order.getCustomerId(), customer.getFullName(),
+                            customer.getPhone(), customer.getEmail(), order.getOrderDate(), order.getStatus(),
+                            order.getTotalAmount(), order.getShippingAddress(), order.getPaymentMethod(),
+                            order.getPaymentStatus(), items);
+                })
+                .toList();
+    }
+
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
+    @org.springframework.transaction.annotation.Transactional
+    public CustomerOrder updateStatus(@PathVariable Long id, @RequestBody StatusUpdate request) {
+        synchronized (store) {
+            CustomerOrder order = one(store.orders(), id);
+            if (!"ONLINE".equals(order.getOrderSource()))
+                throw bad("Đơn hàng này không phải đơn đặt từ cửa hàng trực tuyến");
+            if (request == null || request.status() == null || !ORDER_STATUSES.contains(request.status()))
+                throw bad("Trạng thái đơn hàng không hợp lệ");
+            if ("Đã hủy".equals(order.getStatus()) && !"Đã hủy".equals(request.status()))
+                throw bad("Đơn đã hủy không thể mở lại");
+            String previousStatus = order.getStatus();
+            order.setStatus(request.status());
+            CustomerOrder saved = store.orders().save(order);
+            if (!"Đã hủy".equals(previousStatus) && "Đã hủy".equals(saved.getStatus()))
+                store.restoreStockForOrder(id);
+            return saved;
+        }
+    }
+
     @GetMapping("/{id}") public CustomerOrder one(@PathVariable Long id) { return one(store.orders(), id); }
     @PostMapping public CustomerOrder create(@RequestBody CustomerOrder row) { return create(store.orders(), row); }
     @PutMapping("/{id}") @org.springframework.transaction.annotation.Transactional
@@ -22,6 +71,7 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
             String oldStatus = current.getStatus();
             if (row == null) throw bad("Đơn hàng không hợp lệ");
             row.setId(id);
+            if (row.getOrderSource() == null) row.setOrderSource(current.getOrderSource());
             validate(row);
             CustomerOrder saved = store.orders().save(row);
             if (!"Đã hủy".equals(oldStatus) && "Đã hủy".equals(saved.getStatus()))
@@ -55,4 +105,20 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
         if (!"Đã hủy".equals(old.getStatus())) store.restoreStockForOrder(old.getId());
         store.deleteDetailsOfOrder(old.getId());
     }
+
+    private OnlineOrderItemView onlineOrderItem(OrderDetail detail) {
+        Product product = detail.getProduct();
+        return new OnlineOrderItemView(product.getName(), product.getBrand(), product.getSize(),
+                detail.getQuantity(), detail.getUnitPrice(), detail.getSubtotal());
+    }
+
+    private static final Set<String> ORDER_STATUSES =
+            Set.of("Chờ xác nhận", "Đang xử lý", "Đang giao", "Hoàn thành", "Đã hủy");
+
+    public record StatusUpdate(String status) {}
+    public record OnlineOrderItemView(String productName, String brand, String size,
+            Integer quantity, BigDecimal unitPrice, BigDecimal subtotal) {}
+    public record OnlineOrderView(Long id, Long customerId, String customerName, String customerPhone,
+            String customerEmail, LocalDateTime orderDate, String status, BigDecimal totalAmount,
+            String shippingAddress, String paymentMethod, String paymentStatus, List<OnlineOrderItemView> items) {}
 }

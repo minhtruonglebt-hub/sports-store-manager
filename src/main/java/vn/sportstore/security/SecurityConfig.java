@@ -60,7 +60,11 @@ public class SecurityConfig {
             .securityContext(context -> context.securityContextRepository(securityContextRepository()))
             .sessionManagement(session -> session.sessionFixation(fixation -> fixation.migrateSession()))
             .authorizeHttpRequests(auth -> auth
-                    .requestMatchers("/", "/index.html", "/api/health", "/api/auth/csrf", "/api/auth/login").permitAll()
+                    .requestMatchers("/", "/index.html", "/shop.html", "/shop.js", "/api/health",
+                            "/api/auth/csrf", "/api/auth/login", "/api/auth/customer/register",
+                            "/api/store/products").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/checkout/customer").hasRole("CUSTOMER")
+                    .requestMatchers("/api/store/**").hasRole("CUSTOMER")
                     .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                     .requestMatchers(HttpMethod.POST, "/api/checkout").hasAnyRole("ADMIN", "STAFF")
                     .requestMatchers(HttpMethod.POST, "/api/products/*/stock-adjustments").hasAnyRole("ADMIN", "STAFF")
