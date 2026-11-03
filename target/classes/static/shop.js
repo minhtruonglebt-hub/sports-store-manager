@@ -8,6 +8,7 @@
   let csrf = '';
   let products = [];
   let customerAuthenticated = false;
+  let paymentInfo = null;
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -61,6 +62,7 @@
     document.getElementById('accountName').textContent = '';
     document.getElementById('openLogin').hidden = false;
     document.getElementById('logout').hidden = true;
+    document.getElementById('refreshOrders').hidden = true;
     document.getElementById('customerInfo').textContent =
       'Bạn có thể xem sản phẩm trước. Đăng nhập hoặc tạo tài khoản để đặt hàng và theo dõi đơn.';
     document.getElementById('orderList').textContent = 'Đăng nhập để xem đơn hàng của bạn.';
@@ -74,6 +76,7 @@
     document.getElementById('openLogin').hidden = true;
     document.getElementById('logout').hidden = false;
     document.getElementById('checkout').textContent = 'Đặt hàng';
+    document.getElementById('refreshOrders').hidden = false;
     await Promise.all([loadProducts(), loadOrders(), loadCustomer()]);
   }
 
@@ -145,6 +148,7 @@
   async function loadCustomer() {
     const customer = await api('/api/store/me');
     document.getElementById('accountName').textContent = customer.fullName;
+    document.getElementById('deliveryPhone').value = customer.phone || '';
     document.getElementById('customerInfo').textContent =
       `${customer.fullName} · ${customer.email}${customer.phone ? ` · ${customer.phone}` : ''}`;
   }
@@ -155,9 +159,27 @@
     orderList.innerHTML = orders.length ? orders.map(order => `<article class="order">
       <div class="order-head"><span>Đơn #${order.id} · ${escapeHtml(order.status)}</span><span>${money(order.totalAmount)}</span></div>
       <small>${new Date(order.orderDate).toLocaleString('vi-VN')} · ${escapeHtml(order.paymentStatus || '')}</small>
+      <small>Thanh toán: ${order.paymentMethod === 'BANK_TRANSFER' ? 'Chuyển khoản' : 'COD'}</small>
       <div class="order-items">${order.items.map(item => `${escapeHtml(item.productName)} × ${item.quantity} — ${money(item.subtotal)}`).join('<br>')}</div>
-      <small>Giao đến: ${escapeHtml(order.shippingAddress || '—')}</small>
+      <small>Giao đến: ${escapeHtml(order.shippingAddress || '—')} · SĐT: ${escapeHtml(order.customerPhone || '—')}</small>
+      ${order.customerNote ? `<div class="order-items">Ghi chú: ${escapeHtml(order.customerNote)}</div>` : ''}
     </article>`).join('') : '<div class="empty">Bạn chưa có đơn hàng nào.</div>';
+  }
+
+  async function loadPaymentInfo() {
+    paymentInfo = await api('/api/store/payment-info');
+    const option = document.getElementById('bankTransferOption');
+    const info = document.getElementById('bankTransferInfo');
+    option.disabled = !paymentInfo.bankTransferConfigured;
+    option.textContent = paymentInfo.bankTransferConfigured
+      ? 'Chuyển khoản ngân hàng'
+      : 'Chuyển khoản (chưa được cửa hàng cấu hình)';
+    if (paymentInfo.bankTransferConfigured) {
+      info.innerHTML = `<b>Thông tin chuyển khoản</b><br>Ngân hàng: ${escapeHtml(paymentInfo.bankName)}<br>Số tài khoản: <b>${escapeHtml(paymentInfo.accountNumber)}</b><br>Chủ tài khoản: ${escapeHtml(paymentInfo.accountHolder)}<br>Nội dung: ghi mã đơn sau khi đặt hàng. Cửa hàng sẽ xác nhận sau khi nhận được tiền.`;
+    } else {
+      info.textContent = 'Cửa hàng chưa cấu hình thông tin tài khoản ngân hàng. Vui lòng chọn COD hoặc liên hệ cửa hàng.';
+    }
+    info.hidden = document.getElementById('payment').value !== 'BANK_TRANSFER';
   }
 
   document.getElementById('loginTab').addEventListener('click', () => switchTab(false));
@@ -171,6 +193,16 @@
     if (event.key === 'Escape' && !authScreen.hidden) authScreen.hidden = true;
   });
   document.getElementById('search').addEventListener('input', renderProducts);
+  document.getElementById('payment').addEventListener('change', event => {
+    document.getElementById('bankTransferInfo').hidden = event.target.value !== 'BANK_TRANSFER';
+  });
+  document.getElementById('refreshOrders').addEventListener('click', async () => {
+    try {
+      await loadOrders();
+    } catch (error) {
+      document.getElementById('checkoutError').textContent = error.message || 'Không thể cập nhật đơn hàng.';
+    }
+  });
 
   loginForm.addEventListener('submit', async event => {
     event.preventDefault();
@@ -232,19 +264,34 @@
       document.getElementById('address').focus();
       return;
     }
+    const customerPhone = document.getElementById('deliveryPhone').value.trim();
+    if (!/^[0-9+() .-]{8,20}$/.test(customerPhone)) {
+      errorElement.textContent = 'Vui lòng nhập số điện thoại nhận hàng hợp lệ.';
+      document.getElementById('deliveryPhone').focus();
+      return;
+    }
+    if (document.getElementById('payment').value === 'BANK_TRANSFER' && !paymentInfo?.bankTransferConfigured) {
+      errorElement.textContent = 'Cửa hàng chưa cấu hình tài khoản nhận chuyển khoản. Vui lòng chọn COD.';
+      return;
+    }
     try {
       await api('/api/checkout/customer', {
         method: 'POST',
         body: JSON.stringify({
           shippingAddress,
+          customerPhone,
+          customerNote: document.getElementById('customerNote').value.trim(),
           paymentMethod: document.getElementById('payment').value,
           items: [...cart.entries()].map(([productId, quantity]) => ({ productId, quantity }))
         })
       });
       cart.clear();
       renderCart();
+      document.getElementById('customerNote').value = '';
       await Promise.all([loadProducts(), loadOrders()]);
-      errorElement.textContent = 'Đặt hàng thành công. Đơn hàng đã được gửi tới cửa hàng.';
+      errorElement.textContent = document.getElementById('payment').value === 'BANK_TRANSFER'
+        ? 'Đã nhận đơn. Vui lòng chuyển khoản theo thông tin phía trên; đơn chỉ được xác nhận thanh toán sau khi cửa hàng kiểm tra.'
+        : 'Đặt hàng thành công. Bạn thanh toán khi nhận hàng.';
       errorElement.style.color = 'var(--green)';
     } catch (error) {
       errorElement.style.color = '#a33';
@@ -262,12 +309,37 @@
     }
   });
 
+  document.getElementById('switchToAdmin').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    if (!customerAuthenticated) {
+      window.location.assign('/');
+      return;
+    }
+    button.disabled = true;
+    try {
+      await loadCsrf();
+      try {
+        await api('/api/auth/logout', { method: 'POST' });
+      } catch (error) {
+        if (error.status !== 401) throw error;
+      }
+      window.location.assign('/');
+    } catch (error) {
+      button.disabled = false;
+      const message = error.message || 'Không thể chuyển sang giao diện quản lý.';
+      document.getElementById('checkoutError').textContent = message;
+      document.getElementById('checkoutError').style.color = '#a33';
+    }
+  });
+
   async function init() {
     try {
       await loadCsrf();
+      await loadPaymentInfo();
       const info = await api('/api/auth/me');
       if (!info.roles.includes('CUSTOMER')) {
-        window.location.replace('/');
+        showGuestStore();
+        await loadProducts();
         return;
       }
       await showStore();

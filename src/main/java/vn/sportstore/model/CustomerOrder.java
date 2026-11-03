@@ -18,6 +18,8 @@ public class CustomerOrder extends BaseEntity {
     @Column(nullable = false, length = 40) private String status;
     @Column(nullable = false, precision = 14, scale = 2) private BigDecimal totalAmount;
     @Column(length = 500) private String shippingAddress;
+    @Column(name = "customer_phone", length = 30) private String customerPhone;
+    @Column(name = "customer_note", length = 500) private String customerNote;
     @Column(length = 30) private String paymentMethod;
     @Column(length = 80) private String paymentStatus;
     @Column(name = "order_source", length = 20) private String orderSource = "STORE";

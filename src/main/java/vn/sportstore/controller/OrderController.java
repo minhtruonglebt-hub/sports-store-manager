@@ -34,9 +34,10 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
                     List<OnlineOrderItemView> items = orderDetails.findAllByOrder_Id(order.getId()).stream()
                             .map(this::onlineOrderItem).toList();
                     return new OnlineOrderView(order.getId(), order.getCustomerId(), customer.getFullName(),
-                            customer.getPhone(), customer.getEmail(), order.getOrderDate(), order.getStatus(),
+                            order.getCustomerPhone() == null ? customer.getPhone() : order.getCustomerPhone(),
+                            customer.getEmail(), order.getOrderDate(), order.getStatus(),
                             order.getTotalAmount(), order.getShippingAddress(), order.getPaymentMethod(),
-                            order.getPaymentStatus(), items);
+                            order.getPaymentStatus(), order.getCustomerNote(), items);
                 })
                 .toList();
     }
@@ -60,6 +61,31 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
                 store.restoreStockForOrder(id);
             return saved;
         }
+    }
+
+    @PostMapping("/{id}/payment-confirmation")
+    @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
+    @org.springframework.transaction.annotation.Transactional
+    public CustomerOrder confirmPayment(@PathVariable Long id) {
+        CustomerOrder order = one(store.orders(), id);
+        if (!"ONLINE".equals(order.getOrderSource()))
+            throw bad("Chỉ xác nhận thanh toán cho đơn đặt trực tuyến");
+        if ("Đã hủy".equals(order.getStatus()))
+            throw bad("Không thể xác nhận thanh toán cho đơn hàng đã hủy");
+        String confirmedStatus = switch (order.getPaymentMethod()) {
+            case "BANK_TRANSFER" -> "Đã xác nhận chuyển khoản";
+            case "COD" -> {
+                if (!"Hoàn thành".equals(order.getStatus()))
+                    throw bad("Chỉ xác nhận tiền COD sau khi đơn hàng đã giao thành công");
+                yield "Đã thu tiền khi giao hàng";
+            }
+            default -> throw bad("Phương thức thanh toán của đơn hàng không được hỗ trợ");
+        };
+        if (!confirmedStatus.equals(order.getPaymentStatus())) {
+            order.setPaymentStatus(confirmedStatus);
+            return store.orders().save(order);
+        }
+        return order;
     }
 
     @GetMapping("/{id}") public CustomerOrder one(@PathVariable Long id) { return one(store.orders(), id); }
@@ -120,5 +146,6 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
             Integer quantity, BigDecimal unitPrice, BigDecimal subtotal) {}
     public record OnlineOrderView(Long id, Long customerId, String customerName, String customerPhone,
             String customerEmail, LocalDateTime orderDate, String status, BigDecimal totalAmount,
-            String shippingAddress, String paymentMethod, String paymentStatus, List<OnlineOrderItemView> items) {}
+            String shippingAddress, String paymentMethod, String paymentStatus, String customerNote,
+            List<OnlineOrderItemView> items) {}
 }

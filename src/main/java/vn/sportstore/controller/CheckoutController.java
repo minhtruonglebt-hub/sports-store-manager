@@ -48,8 +48,13 @@ public class CheckoutController {
         if (request.shippingAddress() == null || request.shippingAddress().isBlank()
                 || request.shippingAddress().trim().length() > 500)
             throw bad("Vui lòng nhập địa chỉ giao hàng (tối đa 500 ký tự)");
+        String phone = request.customerPhone() == null ? "" : request.customerPhone().trim();
+        if (!phone.matches("^[0-9+() .-]{8,20}$"))
+            throw bad("Vui lòng nhập số điện thoại nhận hàng hợp lệ");
+        if (request.customerNote() != null && request.customerNote().trim().length() > 500)
+            throw bad("Ghi chú đơn hàng tối đa 500 ký tự");
         CheckoutRequest customerRequest = new CheckoutRequest(account.getCustomer().getId(),
-                request.shippingAddress(), request.paymentMethod(), request.items());
+                request.shippingAddress(), request.paymentMethod(), request.items(), phone, request.customerNote());
         synchronized (store) {
             return checkoutLocked(customerRequest, true);
         }
@@ -62,6 +67,8 @@ public class CheckoutController {
             throw bad("Đơn hàng cần có từ 1 đến 50 mặt hàng");
         String method = request.paymentMethod() == null ? "COD" : request.paymentMethod().trim().toUpperCase(Locale.ROOT);
         if (!METHODS.contains(method)) throw bad("Phương thức thanh toán không được hỗ trợ");
+        if (onlineOrder && !Set.of("COD", "BANK_TRANSFER").contains(method))
+            throw bad("Khách hàng chỉ có thể chọn thanh toán khi nhận hàng hoặc chuyển khoản");
 
         // Validate the whole cart before changing stock, and merge duplicate product rows.
         Map<Long, Integer> quantities = new LinkedHashMap<>();
@@ -89,10 +96,17 @@ public class CheckoutController {
         order.setShippingAddress(request.shippingAddress() == null || request.shippingAddress().isBlank()
                 ? store.customers().findById(request.customerId()).orElseThrow().getAddress()
                 : request.shippingAddress().trim());
+        order.setCustomerPhone(request.customerPhone() == null || request.customerPhone().isBlank()
+                ? order.getCustomer().getPhone() : request.customerPhone().trim());
+        if (onlineOrder && (order.getCustomerPhone() == null
+                || !order.getCustomerPhone().matches("^[0-9+() .-]{8,20}$")))
+            throw bad("Số điện thoại nhận hàng không hợp lệ");
+        order.setCustomerNote(request.customerNote() == null || request.customerNote().isBlank()
+                ? null : request.customerNote().trim());
         order.setPaymentMethod(method);
         order.setOrderSource(onlineOrder ? "ONLINE" : "STORE");
         order.setPaymentStatus(switch (method) {
-            case "COD" -> "Chờ thu tiền khi giao hàng";
+            case "COD" -> "Thu tiền khi giao hàng";
             case "BANK_TRANSFER" -> "Chờ xác nhận chuyển khoản";
             default -> "Đã thanh toán (MÔ PHỎNG)";
         });
@@ -125,6 +139,11 @@ public class CheckoutController {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
-    public record CheckoutRequest(Long customerId, String shippingAddress, String paymentMethod, List<CheckoutItem> items) {}
+    public record CheckoutRequest(Long customerId, String shippingAddress, String paymentMethod,
+            List<CheckoutItem> items, String customerPhone, String customerNote) {
+        public CheckoutRequest(Long customerId, String shippingAddress, String paymentMethod, List<CheckoutItem> items) {
+            this(customerId, shippingAddress, paymentMethod, items, null, null);
+        }
+    }
     public record CheckoutItem(Long productId, Integer quantity) {}
 }

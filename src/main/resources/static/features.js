@@ -54,6 +54,11 @@
   onlineOrdersButton.addEventListener('click', () => { window.location.href = '/admin/orders.html'; });
   navArea.append(onlineOrdersButton);
 
+  const customerStoreButton = document.createElement('button');
+  customerStoreButton.innerHTML = '<span class="ico">🛍</span><span class="nav-label">Mở cửa hàng khách hàng</span>';
+  customerStoreButton.addEventListener('click', () => { window.location.assign('/shop.html'); });
+  navArea.append(customerStoreButton);
+
   const profile = document.querySelector('.profile');
   if (profile) {
     profile.innerHTML = '<span class="avatar" id="userAvatar">?</span><div class="profile-info"><b id="userName">Chưa đăng nhập</b><small id="userRole">—</small></div><button id="logoutButton" class="logout" type="button">Thoát</button>';

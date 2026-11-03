@@ -1,6 +1,7 @@
 package vn.sportstore.controller;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,13 +25,22 @@ public class StorefrontController {
     private final OrderRepository orders;
     private final UserAccountRepository users;
     private final OrderDetailRepository orderDetails;
+    private final String bankName;
+    private final String bankAccountNumber;
+    private final String bankAccountHolder;
 
     public StorefrontController(ProductRepository products, OrderRepository orders, UserAccountRepository users,
-            OrderDetailRepository orderDetails) {
+            OrderDetailRepository orderDetails,
+            @Value("${sportstore.payment.bank-name:}") String bankName,
+            @Value("${sportstore.payment.bank-account-number:}") String bankAccountNumber,
+            @Value("${sportstore.payment.bank-account-holder:}") String bankAccountHolder) {
         this.products = products;
         this.orders = orders;
         this.users = users;
         this.orderDetails = orderDetails;
+        this.bankName = bankName;
+        this.bankAccountNumber = bankAccountNumber;
+        this.bankAccountHolder = bankAccountHolder;
     }
 
     @GetMapping("/products")
@@ -42,6 +52,13 @@ public class StorefrontController {
                         product.getSize(), product.getColor(), product.getPrice(), product.getQuantity(),
                         product.getImageUrl()))
                 .toList();
+    }
+
+    @GetMapping("/payment-info")
+    public PaymentInfo paymentInfo() {
+        boolean configured = !bankName.isBlank() && !bankAccountNumber.isBlank() && !bankAccountHolder.isBlank();
+        return new PaymentInfo(configured, configured ? bankName : "", configured ? bankAccountNumber : "",
+                configured ? bankAccountHolder : "");
     }
 
     @GetMapping("/me")
@@ -58,8 +75,9 @@ public class StorefrontController {
         Long customerId = customerAccount(authentication).getCustomer().getId();
         return orders.findAllByCustomer_IdOrderByOrderDateDesc(customerId).stream()
                 .map(order -> new OrderView(order.getId(), order.getOrderDate(), order.getStatus(),
-                        order.getTotalAmount(), order.getShippingAddress(), order.getPaymentMethod(),
-                        order.getPaymentStatus(), orderDetails.findAllByOrder_Id(order.getId()).stream()
+                        order.getTotalAmount(), order.getShippingAddress(), order.getCustomerPhone(),
+                        order.getCustomerNote(), order.getPaymentMethod(), order.getPaymentStatus(),
+                        orderDetails.findAllByOrder_Id(order.getId()).stream()
                                 .map(this::detailView).toList()))
                 .toList();
     }
@@ -83,8 +101,10 @@ public class StorefrontController {
     public record ProductView(Long id, String name, String brand, String size, String color,
             BigDecimal price, Integer quantity, String imageUrl) {}
     public record CustomerView(String username, String fullName, String email, String phone) {}
+    public record PaymentInfo(boolean bankTransferConfigured, String bankName, String accountNumber, String accountHolder) {}
     public record OrderView(Long id, LocalDateTime orderDate, String status, BigDecimal totalAmount,
-            String shippingAddress, String paymentMethod, String paymentStatus, List<OrderItemView> items) {}
+            String shippingAddress, String customerPhone, String customerNote, String paymentMethod,
+            String paymentStatus, List<OrderItemView> items) {}
     public record OrderItemView(String productName, String imageUrl, Integer quantity,
             BigDecimal unitPrice, BigDecimal subtotal) {}
 }
