@@ -1,5 +1,8 @@
 package vn.sportstore.controller;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import vn.sportstore.model.CustomerOrder;
@@ -14,6 +17,21 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
     private final StoreService store;
     public OrderDetailController(StoreService store) { this.store = store; }
     @GetMapping public List<OrderDetail> all() { return all(store.details()); }
+    @GetMapping("/page")
+    public java.util.Map<String,Object> page(@RequestParam(defaultValue="") String q,
+            @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="10") int size) {
+        if(q.length()>100||page<0||page>10000||size<1||size>100)
+            throw bad("Từ khóa, trang hoặc số dòng mỗi trang không hợp lệ");
+        Page<OrderDetail> result=store.details().search(q.trim().toLowerCase(java.util.Locale.ROOT),
+                numericId(q),
+                PageRequest.of(page,size,Sort.by("id").ascending()));
+        return java.util.Map.of("items",result.getContent(),"page",result.getNumber(),"size",result.getSize(),
+                "total",result.getTotalElements(),"totalPages",result.getTotalPages());
+    }
+    private static Long numericId(String q) {
+        try { return Long.valueOf(q.trim()); }
+        catch (NumberFormatException ignored) { return null; }
+    }
     @GetMapping("/{id}") public OrderDetail one(@PathVariable Long id) { return one(store.details(), id); }
     @PostMapping
     @org.springframework.transaction.annotation.Transactional
@@ -58,9 +76,8 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
         synchronized (store) {
             OrderDetail current = one(store.details(), id);
             Long orderId = current.getOrderId();
-            CustomerOrder order = store.orders().findById(orderId).orElseThrow();
             ensureOrderCanBeEdited(orderId);
-            if (!"Đã hủy".equals(order.getStatus())) adjustStock(current, null, "Xóa chi tiết đơn #" + orderId);
+            adjustStock(current, null, "Xóa chi tiết đơn #" + orderId);
             store.details().deleteById(id);
             store.recalcOrderTotal(orderId);
         }

@@ -410,12 +410,14 @@
         productsElement.innerHTML = `<div class="empty">${escapeHtml(error.message || 'Không thể tải cửa hàng.')}</div>`;
       }
     }
-    if (paymentResult === 'success' || paymentResult === 'failed') {
+    if (paymentResult === 'success' || paymentResult === 'failed' || paymentResult === 'processing') {
       const message = document.getElementById('checkoutError');
       message.textContent = paymentResult === 'success'
         ? 'VNPay đã xác nhận thanh toán. Bạn có thể xem trạng thái đơn hàng bên dưới.'
-        : 'Thanh toán VNPay chưa thành công hoặc chưa được xác nhận. Kiểm tra đơn hàng hoặc liên hệ cửa hàng.';
-      message.style.color = paymentResult === 'success' ? 'var(--green)' : '#a33';
+        : paymentResult === 'processing'
+          ? 'Đã quay lại từ VNPay; cửa hàng đang chờ thông báo xác nhận chính thức. Hãy cập nhật đơn hàng sau ít phút.'
+          : 'Thanh toán VNPay chưa thành công. Kiểm tra đơn hàng hoặc thử đặt lại.';
+      message.style.color = paymentResult === 'success' ? 'var(--green)' : paymentResult === 'processing' ? '#92631b' : '#a33';
       window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     }
   }

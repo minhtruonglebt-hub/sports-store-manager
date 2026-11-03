@@ -32,7 +32,7 @@ mvn spring-boot:run
 
 VNPay cần URL trả kết quả công khai có thể truy cập từ Internet; URL localhost chỉ phù hợp chạy và kiểm thử trên máy, không đủ để nhận callback từ sandbox. IPN được cấu hình tại VNPay trỏ đến cùng máy chủ với `/api/payments/vnpay/ipn`. Không gửi hoặc commit `HASH_SECRET`; chỉ xác nhận thanh toán sau khi chữ ký, mã merchant, mã đơn và số tiền được kiểm tra. Giao dịch production cần tài khoản merchant production và URL HTTPS thực tế.
 
-Tìm kiếm/lọc danh sách sản phẩm quản trị dùng truy vấn phân trang ở cơ sở dữ liệu; giới hạn trang tối đa 100 dòng. Kiểm thử tích hợp có kịch bản trên 100 sản phẩm, kiểm tra phân quyền/CSRF, chữ ký callback VNPay sai/đúng và xử lý callback lặp.
+Tìm kiếm/lọc danh sách sản phẩm, khách hàng, đơn hàng và chi tiết đơn quản trị dùng truy vấn phân trang ở cơ sở dữ liệu; giới hạn trang tối đa 100 dòng. Kiểm thử tích hợp có kịch bản trên 100 bản ghi, kiểm tra phân quyền/CSRF, chữ ký callback VNPay sai/đúng và xử lý callback lặp. Kết quả trả về trình duyệt không nạp toàn bộ các danh sách lớn.
 
 ## Chức năng
 

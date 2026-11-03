@@ -102,16 +102,26 @@ class VnPayPaymentIntegrationTest {
         callback.put("vnp_TransactionNo", "123456789");
         callback.put("vnp_BankCode", "NCB");
         callback.put("vnp_PayDate", "20261103220000");
+        callback.put("vnp_SecureHash", VnPayService.sign(new TreeMap<>(callback), HASH_SECRET));
+
+        mockMvc.perform(get("/api/payments/vnpay/return").params(toParams(callback)))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
+                        "/shop.html?payment=processing"));
+        JsonNode pendingBeforeIpn = objectMapper.readTree(mockMvc.perform(get("/api/store/orders").session(session))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertTrue(java.util.stream.StreamSupport.stream(pendingBeforeIpn.spliterator(), false)
+                .anyMatch(order -> order.path("id").asText().equals(orderId)
+                        && "Chờ thanh toán VNPay".equals(order.path("paymentStatus").asText())));
 
         Map<String, String> tampered = new LinkedHashMap<>(callback);
         tampered.put("vnp_Amount", Long.toString(Long.parseLong(amount) + 100));
-        tampered.put("vnp_SecureHash", VnPayService.sign(new TreeMap<>(callback), HASH_SECRET));
         mockMvc.perform(get("/api/payments/vnpay/ipn").params(toParams(tampered)))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
                         "$.RspCode").value("97"));
 
-        callback.put("vnp_SecureHash", VnPayService.sign(new TreeMap<>(callback), HASH_SECRET));
         mockMvc.perform(get("/api/payments/vnpay/ipn").params(toParams(callback)))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
@@ -120,6 +130,10 @@ class VnPayPaymentIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
                         "$.RspCode").value("02"));
+        mockMvc.perform(get("/api/payments/vnpay/return").params(toParams(callback)))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
+                        "/shop.html?payment=success"));
 
         JsonNode customerOrders = objectMapper.readTree(mockMvc.perform(get("/api/store/orders").session(session))
                 .andExpect(status().isOk())

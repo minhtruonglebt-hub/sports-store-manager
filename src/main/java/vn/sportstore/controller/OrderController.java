@@ -1,6 +1,9 @@
 package vn.sportstore.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import vn.sportstore.model.OrderDetail;
@@ -10,6 +13,7 @@ import vn.sportstore.repository.OrderDetailRepository;
 import vn.sportstore.service.StoreService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Set;
 import java.util.List;
 
@@ -22,6 +26,16 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
         this.orderDetails = orderDetails;
     }
     @GetMapping public List<CustomerOrder> all() { return all(store.orders()); }
+    @GetMapping("/page")
+    public Map<String,Object> page(@RequestParam(defaultValue="") String q,
+            @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="10") int size) {
+        validatePage(q,page,size);
+        Page<CustomerOrder> result=store.orders().search(q.trim().toLowerCase(java.util.Locale.ROOT),
+                numericId(q),
+                PageRequest.of(page,size,Sort.by(Sort.Direction.DESC,"orderDate").and(Sort.by("id"))));
+        return Map.of("items",result.getContent(),"page",result.getNumber(),"size",result.getSize(),
+                "total",result.getTotalElements(),"totalPages",result.getTotalPages());
+    }
     @GetMapping("/online")
     @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -127,6 +141,17 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
         if ("VNPAY".equals(order.getPaymentMethod())
                 && "Chờ thanh toán VNPay".equals(order.getPaymentStatus()))
             throw bad("Đơn VNPay đang chờ kết quả thanh toán; không thể hủy lúc này");
+    }
+
+    private static void validatePage(String q,int page,int size) {
+        if(q.length()>100||page<0||page>10000||size<1||size>100)
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,"Từ khóa, trang hoặc số dòng mỗi trang không hợp lệ");
+    }
+
+    private static Long numericId(String q) {
+        try { return Long.valueOf(q.trim()); }
+        catch (NumberFormatException ignored) { return null; }
     }
 
     @Override protected void validate(CustomerOrder order) {

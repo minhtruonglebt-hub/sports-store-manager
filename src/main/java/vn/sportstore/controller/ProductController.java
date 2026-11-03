@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
@@ -87,14 +88,17 @@ public class ProductController extends CrudControllerSupport<Product> {
     public Map<String, Object> filter(@RequestParam(defaultValue = "") String q,
             @RequestParam(required = false) Long categoryId, @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice, @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "asc") String direction) {
         if (page < 0 || page > 10000 || size < 1 || size > 100) throw bad("Trang hoặc số dòng mỗi trang không hợp lệ");
-        if (q.length() > 100 || (minPrice != null && minPrice.signum() < 0) || (maxPrice != null && maxPrice.signum() < 0)
+        if (q.length() > 100 || !Set.of("asc", "desc").contains(direction.toLowerCase(Locale.ROOT))
+                || (minPrice != null && minPrice.signum() < 0) || (maxPrice != null && maxPrice.signum() < 0)
                 || (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0))
-            throw bad("Từ khóa hoặc khoảng giá không hợp lệ");
+            throw bad("Từ khóa, thứ tự hoặc khoảng giá không hợp lệ");
         String query = q.trim().toLowerCase(Locale.ROOT);
+        Sort sort = Sort.by("desc".equalsIgnoreCase(direction) ? Sort.Direction.DESC : Sort.Direction.ASC, "id");
         Page<Product> result = store.products().search(query, categoryId, minPrice, maxPrice,
-                status == null ? "" : status.trim(), PageRequest.of(page, size, Sort.by("id").ascending()));
+                status == null ? "" : status.trim(), PageRequest.of(page, size, sort));
         return Map.of("items", result.getContent(),
                 "page", result.getNumber(), "size", result.getSize(),
                 "total", result.getTotalElements(), "totalPages", result.getTotalPages());

@@ -29,10 +29,25 @@ public class VnPayPaymentController {
     }
 
     @GetMapping("/return")
-    @Transactional
     public RedirectView paymentReturn(HttpServletRequest request) {
-        boolean paid = processCallback(parameters(request));
-        return new RedirectView("/shop.html?payment=" + (paid ? "success" : "failed"), true, false);
+        Map<String, String> parameters = parameters(request);
+        if (!vnPay.hasValidSignature(parameters))
+            return new RedirectView("/shop.html?payment=failed", true, false);
+        try {
+            long orderId = Long.parseLong(parameters.getOrDefault("vnp_TxnRef", ""));
+            CustomerOrder order = orders.findById(orderId).orElse(null);
+            if (order == null || !"ONLINE".equals(order.getOrderSource())
+                    || !"VNPAY".equals(order.getPaymentMethod()))
+                return new RedirectView("/shop.html?payment=failed", true, false);
+            if ("Đã thanh toán VNPay".equals(order.getPaymentStatus()))
+                return new RedirectView("/shop.html?payment=success", true, false);
+            if ("Đã hủy".equals(order.getStatus())
+                    || "Thanh toán VNPay thất bại".equals(order.getPaymentStatus()))
+                return new RedirectView("/shop.html?payment=failed", true, false);
+            return new RedirectView("/shop.html?payment=processing", true, false);
+        } catch (NumberFormatException exception) {
+            return new RedirectView("/shop.html?payment=failed", true, false);
+        }
     }
 
     @GetMapping("/ipn")

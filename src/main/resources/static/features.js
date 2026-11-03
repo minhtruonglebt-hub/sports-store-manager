@@ -3,10 +3,13 @@
   const originalRender = render;
   const originalDashboard = dashboard;
   const originalShow = show;
+  const originalLoad = load;
   cfg.products.fields.push(['minStock', 'Ngưỡng cảnh báo tồn kho', 'number']);
   cfg.products.cols.push(['minStock', 'Cảnh báo từ']);
   let account = null;
   let productPage = 0;
+  let entityPage = 0;
+  let entityRequest = 0;
   let cart = new Map();
   let saleProducts = [];
   let csrf = '';
@@ -82,6 +85,13 @@
   const pageControls = document.createElement('span');
   pageControls.id = 'pageControls'; pageControls.className = 'page-controls'; pageControls.style.display = 'none';
   document.querySelector('.pagination')?.append(pageControls);
+  const entityPageSize = document.createElement('select');
+  entityPageSize.id = 'entityPageSize';
+  entityPageSize.className = 'filter';
+  entityPageSize.setAttribute('aria-label', 'Số dòng mỗi trang');
+  entityPageSize.innerHTML = '<option value="10">10 / trang</option><option value="25">25 / trang</option><option value="50">50 / trang</option><option value="100">100 / trang</option>';
+  entityPageSize.style.display = 'none';
+  tools?.append(entityPageSize);
 
   // All unsafe HTTP methods include the session-bound CSRF token.
   api = async (url, options = {}) => {
@@ -104,6 +114,25 @@
     const response = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
     const result = await response.json(); csrf = result.token;
   }
+
+  load = async () => {
+    if (current === 'dashboard') {
+      const [productPageResult, categories] = await Promise.all([
+        api('/api/products/filter?page=0&size=6&direction=desc'),
+        api('/api/categories')
+      ]);
+      rows.products = [...productPageResult.items].reverse();
+      rows.categories = extract(categories);
+      rows.orders = [];
+      rows.customers = [];
+      rows.details = [];
+      return;
+    }
+    if (current === 'categories') {
+      rows.categories = extract(await api('/api/categories'));
+      return;
+    }
+  };
   function setAccount(info) {
     if (info.roles.includes('CUSTOMER')) {
       window.location.replace('/shop.html');
@@ -190,8 +219,60 @@
       document.getElementById('nextProductPage')?.addEventListener('click', () => { productPage++; render(); });
     } catch (error) { notify(error.message); }
   }
-  render = () => current === 'products' ? renderFilteredProducts() : current === 'checkout' ? renderSale() : originalRender();
-  search.addEventListener('input', () => { productPage = 0; if (current === 'products') render(); });
+  async function renderPagedEntity() {
+    const key = current;
+    const requestId = ++entityRequest;
+    const params = new URLSearchParams({
+      q: search.value.trim(),
+      page: String(entityPage),
+      size: entityPageSize.value
+    });
+    try {
+      let result = await api(`${cfg[key].url}/page?${params}`);
+      if (requestId !== entityRequest || current !== key) return;
+      if (result.totalPages > 0 && entityPage >= result.totalPages) {
+        entityPage = result.totalPages - 1;
+        params.set('page', String(entityPage));
+        result = await api(`${cfg[key].url}/page?${params}`);
+        if (requestId !== entityRequest || current !== key) return;
+      }
+      rows[key] = result.items;
+      originalRender();
+      count.textContent = `Tổng ${result.total} mục`;
+      pageControls.innerHTML = `<button type="button" ${result.page <= 0 ? 'disabled' : ''} id="prevEntityPage">‹</button><span>Trang ${result.totalPages ? result.page + 1 : 0} / ${result.totalPages}</span><button type="button" ${result.page + 1 >= result.totalPages ? 'disabled' : ''} id="nextEntityPage">›</button>`;
+      document.getElementById('prevEntityPage')?.addEventListener('click', () => {
+        entityPage--;
+        renderPagedEntity();
+      });
+      document.getElementById('nextEntityPage')?.addEventListener('click', () => {
+        entityPage++;
+        renderPagedEntity();
+      });
+    } catch (error) {
+      if (requestId === entityRequest && current === key) notify(error.message);
+    }
+  }
+  const pagedEntities = new Set(['customers', 'orders', 'details']);
+  render = () => {
+    if (current === 'products') return renderFilteredProducts();
+    if (current === 'checkout') return renderSale();
+    if (pagedEntities.has(current)) return renderPagedEntity();
+    entityRequest++;
+    pageControls.style.display = 'none';
+    entityPageSize.style.display = 'none';
+    return originalRender();
+  };
+  search.addEventListener('input', () => {
+    productPage = 0;
+    if (pagedEntities.has(current)) {
+      entityPage = 0;
+      render();
+    } else if (current === 'products') render();
+  });
+  entityPageSize.addEventListener('change', () => {
+    entityPage = 0;
+    renderPagedEntity();
+  });
   filter.addEventListener('change', () => { productPage = 0; if (current === 'products') render(); });
   filters.querySelectorAll('select,input').forEach(el => el.addEventListener('change', () => { productPage = 0; if (current === 'products') render(); }));
   document.getElementById('categoryFilter').addEventListener('focus', populateCategories);
@@ -203,13 +284,18 @@
   }
 
   show = key => {
+    entityPage = 0;
     if (key !== 'checkout') {
       salesView.style.display = 'none'; stats.style.display = ''; panel.style.display = '';
-      filters.style.display = key === 'products' ? 'flex' : 'none'; pageControls.style.display = key === 'products' ? 'flex' : 'none';
+      filters.style.display = key === 'products' ? 'flex' : 'none';
+      pageControls.style.display = key === 'products' || pagedEntities.has(key) ? 'flex' : 'none';
+      entityPageSize.style.display = pagedEntities.has(key) ? '' : 'none';
       inventoryNotice.style.display = 'none';
       originalShow(key); if (key === 'products') { populateCategories(); render(); }
       return;
     }
+    entityRequest++;
+    entityPageSize.style.display = 'none';
     current = 'checkout';
     document.querySelectorAll('#nav button').forEach(button => button.classList.toggle('active', button.dataset.key === 'checkout'));
     side.classList.remove('open'); crumb.textContent = title.textContent = 'Bán hàng';
