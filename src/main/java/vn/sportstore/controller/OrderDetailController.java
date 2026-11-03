@@ -59,6 +59,7 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
             OrderDetail current = one(store.details(), id);
             Long orderId = current.getOrderId();
             CustomerOrder order = store.orders().findById(orderId).orElseThrow();
+            ensureOrderCanBeEdited(orderId);
             if (!"Đã hủy".equals(order.getStatus())) adjustStock(current, null, "Xóa chi tiết đơn #" + orderId);
             store.details().deleteById(id);
             store.recalcOrderTotal(orderId);
@@ -82,6 +83,10 @@ public class OrderDetailController extends CrudControllerSupport<OrderDetail> {
     private void ensureOrderCanBeEdited(Long orderId) {
         CustomerOrder order = store.orders().findById(orderId).orElseThrow();
         if ("Đã hủy".equals(order.getStatus())) throw bad("Không thể thêm hoặc sửa chi tiết của đơn đã hủy");
+        if ("VNPAY".equals(order.getPaymentMethod())
+                && ("Chờ thanh toán VNPay".equals(order.getPaymentStatus())
+                        || "Đã thanh toán VNPay".equals(order.getPaymentStatus())))
+            throw bad("Không thể sửa chi tiết đơn VNPay đang chờ hoặc đã thanh toán");
     }
 
     private void adjustStock(OrderDetail current, OrderDetail replacement, String reason) {

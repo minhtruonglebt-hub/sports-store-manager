@@ -18,6 +18,22 @@ Tài khoản demo: **admin / Admin@123** (quản trị) hoặc **staff / Staff@1
 
 Chạy `mvn test` tại thư mục project để kiểm tra luồng thanh toán, cập nhật tồn kho, từ chối đơn vượt tồn kho, đăng nhập/phân quyền API và bảo vệ CSRF. Kiểm thử dùng cơ sở dữ liệu H2 riêng, không sửa dữ liệu MariaDB đang chạy.
 
+## VNPay sandbox
+
+Khách hàng có thể chọn VNPay khi cửa hàng cấu hình đủ thông tin merchant. Mặc định lựa chọn này bị vô hiệu hóa; mã thanh toán mô phỏng MoMo/thẻ không thu tiền thật. Để dùng sandbox, lấy `TMN_CODE` và `HASH_SECRET` từ tài khoản VNPay sandbox, rồi đặt biến môi trường trong PowerShell trước khi chạy ứng dụng:
+
+```powershell
+$env:SPORTSTORE_VNPAY_TMN_CODE = "TMN_CODE_SANDBOX"
+$env:SPORTSTORE_VNPAY_HASH_SECRET = "HASH_SECRET_SANDBOX"
+$env:SPORTSTORE_VNPAY_PAYMENT_URL = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+$env:SPORTSTORE_VNPAY_RETURN_URL = "https://<địa-chỉ-công-khai-của-bạn>/api/payments/vnpay/return"
+mvn spring-boot:run
+```
+
+VNPay cần URL trả kết quả công khai có thể truy cập từ Internet; URL localhost chỉ phù hợp chạy và kiểm thử trên máy, không đủ để nhận callback từ sandbox. IPN được cấu hình tại VNPay trỏ đến cùng máy chủ với `/api/payments/vnpay/ipn`. Không gửi hoặc commit `HASH_SECRET`; chỉ xác nhận thanh toán sau khi chữ ký, mã merchant, mã đơn và số tiền được kiểm tra. Giao dịch production cần tài khoản merchant production và URL HTTPS thực tế.
+
+Tìm kiếm/lọc danh sách sản phẩm quản trị dùng truy vấn phân trang ở cơ sở dữ liệu; giới hạn trang tối đa 100 dòng. Kiểm thử tích hợp có kịch bản trên 100 sản phẩm, kiểm tra phân quyền/CSRF, chữ ký callback VNPay sai/đúng và xử lý callback lặp.
+
 ## Chức năng
 
 - CRUD danh mục, sản phẩm, khách hàng, đơn hàng và chi tiết đơn hàng.
@@ -28,7 +44,7 @@ Chạy `mvn test` tại thư mục project để kiểm tra luồng thanh toán,
 - Dashboard doanh thu, đơn chờ xử lý, cảnh báo tồn kho và số lượng dữ liệu.
 - Trạng thái backend và kết nối cơ sở dữ liệu được kiểm tra tự động trên dashboard.
 - Đăng nhập theo phiên, phân quyền Admin/Staff, BCrypt và bảo vệ CSRF.
-- Thanh toán COD, chuyển khoản chờ xác nhận, MoMo demo và thẻ demo. Lựa chọn demo không thu tiền thật.
+- Thanh toán COD, chuyển khoản chờ xác nhận, VNPay qua sandbox khi có cấu hình merchant, MoMo demo và thẻ demo. Lựa chọn demo không thu tiền thật.
 
 ## Cấu trúc
 

@@ -2,6 +2,9 @@ package vn.sportstore.controller;
 
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -90,17 +93,11 @@ public class ProductController extends CrudControllerSupport<Product> {
                 || (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0))
             throw bad("Từ khóa hoặc khoảng giá không hợp lệ");
         String query = q.trim().toLowerCase(Locale.ROOT);
-        List<Product> filtered = store.products().findAll().stream()
-                .filter(p -> query.isBlank() || (p.getName() + " " + p.getBrand() + " " + p.getColor()).toLowerCase(Locale.ROOT).contains(query))
-                .filter(p -> categoryId == null || categoryId.equals(p.getCategoryId()))
-                .filter(p -> minPrice == null || p.getPrice().compareTo(minPrice) >= 0)
-                .filter(p -> maxPrice == null || p.getPrice().compareTo(maxPrice) <= 0)
-                .filter(p -> status == null || status.isBlank() || status.equals(p.getStatus()))
-                .toList();
-        int from = (int)Math.min((long)page * size, filtered.size());
-        int to = Math.min(from + size, filtered.size());
-        return Map.of("items", filtered.subList(from, to),
-                "page", page, "size", size, "total", filtered.size(), "totalPages", (int)Math.ceil(filtered.size() / (double)size));
+        Page<Product> result = store.products().search(query, categoryId, minPrice, maxPrice,
+                status == null ? "" : status.trim(), PageRequest.of(page, size, Sort.by("id").ascending()));
+        return Map.of("items", result.getContent(),
+                "page", result.getNumber(), "size", result.getSize(),
+                "total", result.getTotalElements(), "totalPages", result.getTotalPages());
     }
 
     @GetMapping("/{id}") public EntityModel<Product> one(@PathVariable Long id) { return model(one(store.products(), id)); }

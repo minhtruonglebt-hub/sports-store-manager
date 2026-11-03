@@ -13,6 +13,7 @@ import vn.sportstore.repository.OrderDetailRepository;
 import vn.sportstore.repository.OrderRepository;
 import vn.sportstore.repository.ProductRepository;
 import vn.sportstore.repository.UserAccountRepository;
+import vn.sportstore.service.VnPayService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -28,12 +29,14 @@ public class StorefrontController {
     private final String bankName;
     private final String bankAccountNumber;
     private final String bankAccountHolder;
+    private final VnPayService vnPay;
 
     public StorefrontController(ProductRepository products, OrderRepository orders, UserAccountRepository users,
             OrderDetailRepository orderDetails,
             @Value("${sportstore.payment.bank-name:}") String bankName,
             @Value("${sportstore.payment.bank-account-number:}") String bankAccountNumber,
-            @Value("${sportstore.payment.bank-account-holder:}") String bankAccountHolder) {
+            @Value("${sportstore.payment.bank-account-holder:}") String bankAccountHolder,
+            VnPayService vnPay) {
         this.products = products;
         this.orders = orders;
         this.users = users;
@@ -41,6 +44,7 @@ public class StorefrontController {
         this.bankName = bankName;
         this.bankAccountNumber = bankAccountNumber;
         this.bankAccountHolder = bankAccountHolder;
+        this.vnPay = vnPay;
     }
 
     @GetMapping("/products")
@@ -58,7 +62,7 @@ public class StorefrontController {
     public PaymentInfo paymentInfo() {
         boolean configured = !bankName.isBlank() && !bankAccountNumber.isBlank() && !bankAccountHolder.isBlank();
         return new PaymentInfo(configured, configured ? bankName : "", configured ? bankAccountNumber : "",
-                configured ? bankAccountHolder : "");
+                configured ? bankAccountHolder : "", vnPay.isConfigured());
     }
 
     @GetMapping("/me")
@@ -101,7 +105,8 @@ public class StorefrontController {
     public record ProductView(Long id, String name, String brand, String size, String color,
             BigDecimal price, Integer quantity, String imageUrl) {}
     public record CustomerView(String username, String fullName, String email, String phone) {}
-    public record PaymentInfo(boolean bankTransferConfigured, String bankName, String accountNumber, String accountHolder) {}
+    public record PaymentInfo(boolean bankTransferConfigured, String bankName, String accountNumber,
+            String accountHolder, boolean vnPayConfigured) {}
     public record OrderView(Long id, LocalDateTime orderDate, String status, BigDecimal totalAmount,
             String shippingAddress, String customerPhone, String customerNote, String paymentMethod,
             String paymentStatus, List<OrderItemView> items) {}

@@ -12,6 +12,7 @@ C:\sports-store-manager\src\main\java\vn\sportstore\controller\OrderDetailContro
 C:\sports-store-manager\src\main\java\vn\sportstore\controller\ProductController.java
 C:\sports-store-manager\src\main\java\vn\sportstore\controller\StorefrontController.java
 C:\sports-store-manager\src\main\java\vn\sportstore\controller\UserAccountController.java
+C:\sports-store-manager\src\main\java\vn\sportstore\controller\VnPayPaymentController.java
 C:\sports-store-manager\src\main\java\vn\sportstore\model\BaseEntity.java
 C:\sports-store-manager\src\main\java\vn\sportstore\model\Category.java
 C:\sports-store-manager\src\main\java\vn\sportstore\model\Customer.java
@@ -32,4 +33,5 @@ C:\sports-store-manager\src\main\java\vn\sportstore\service\CustomerAccountServi
 C:\sports-store-manager\src\main\java\vn\sportstore\service\ProductImageStorage.java
 C:\sports-store-manager\src\main\java\vn\sportstore\service\StoreService.java
 C:\sports-store-manager\src\main\java\vn\sportstore\service\UserAccountService.java
+C:\sports-store-manager\src\main\java\vn\sportstore\service\VnPayService.java
 C:\sports-store-manager\src\main\java\vn\sportstore\SportsStoreApplication.java

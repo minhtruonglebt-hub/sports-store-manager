@@ -54,6 +54,7 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
                 throw bad("Trạng thái đơn hàng không hợp lệ");
             if ("Đã hủy".equals(order.getStatus()) && !"Đã hủy".equals(request.status()))
                 throw bad("Đơn đã hủy không thể mở lại");
+            if ("Đã hủy".equals(request.status())) ensureVnPayCanBeCancelled(order);
             String previousStatus = order.getStatus();
             order.setStatus(request.status());
             CustomerOrder saved = store.orders().save(order);
@@ -97,7 +98,11 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
             String oldStatus = current.getStatus();
             if (row == null) throw bad("Đơn hàng không hợp lệ");
             row.setId(id);
-            if (row.getOrderSource() == null) row.setOrderSource(current.getOrderSource());
+            if (!"Đã hủy".equals(oldStatus) && "Đã hủy".equals(row.getStatus()))
+                ensureVnPayCanBeCancelled(current);
+            row.setOrderSource(current.getOrderSource());
+            row.setPaymentMethod(current.getPaymentMethod());
+            row.setPaymentStatus(current.getPaymentStatus());
             validate(row);
             CustomerOrder saved = store.orders().save(row);
             if (!"Đã hủy".equals(oldStatus) && "Đã hủy".equals(saved.getStatus()))
@@ -109,8 +114,19 @@ public class OrderController extends CrudControllerSupport<CustomerOrder> {
     @org.springframework.transaction.annotation.Transactional
     public void delete(@PathVariable Long id) {
         synchronized (store) {
+            CustomerOrder order = one(store.orders(), id);
+            if ("VNPAY".equals(order.getPaymentMethod())
+                    && ("Chờ thanh toán VNPay".equals(order.getPaymentStatus())
+                            || "Đã thanh toán VNPay".equals(order.getPaymentStatus())))
+                throw bad("Không thể xóa đơn VNPay đang chờ hoặc đã thanh toán");
             remove(store.orders(), id);
         }
+    }
+
+    private static void ensureVnPayCanBeCancelled(CustomerOrder order) {
+        if ("VNPAY".equals(order.getPaymentMethod())
+                && "Chờ thanh toán VNPay".equals(order.getPaymentStatus()))
+            throw bad("Đơn VNPay đang chờ kết quả thanh toán; không thể hủy lúc này");
     }
 
     @Override protected void validate(CustomerOrder order) {

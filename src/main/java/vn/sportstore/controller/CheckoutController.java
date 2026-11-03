@@ -1,5 +1,6 @@
 package vn.sportstore.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -11,6 +12,7 @@ import vn.sportstore.model.Product;
 import vn.sportstore.model.UserAccount;
 import vn.sportstore.repository.UserAccountRepository;
 import vn.sportstore.service.StoreService;
+import vn.sportstore.service.VnPayService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,13 +21,15 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/checkout")
 public class CheckoutController {
-    private static final Set<String> METHODS = Set.of("COD", "BANK_TRANSFER", "MOMO_DEMO", "CARD_DEMO");
+    private static final Set<String> METHODS = Set.of("COD", "BANK_TRANSFER", "MOMO_DEMO", "CARD_DEMO", "VNPAY");
     private final StoreService store;
     private final UserAccountRepository users;
+    private final VnPayService vnPay;
 
-    public CheckoutController(StoreService store, UserAccountRepository users) {
+    public CheckoutController(StoreService store, UserAccountRepository users, VnPayService vnPay) {
         this.store = store;
         this.users = users;
+        this.vnPay = vnPay;
     }
 
     @PostMapping
@@ -40,7 +44,8 @@ public class CheckoutController {
     @PostMapping("/customer")
     @PreAuthorize("hasRole('CUSTOMER')")
     @org.springframework.transaction.annotation.Transactional
-    public Map<String, Object> customerCheckout(@RequestBody CheckoutRequest request, Authentication authentication) {
+    public Map<String, Object> customerCheckout(@RequestBody CheckoutRequest request, Authentication authentication,
+            HttpServletRequest servletRequest) {
         if (request == null) throw bad("Đơn hàng không hợp lệ");
         UserAccount account = users.findByUsernameIgnoreCase(authentication.getName())
                 .orElseThrow(() -> bad("Tài khoản khách hàng không hợp lệ"));
@@ -56,19 +61,25 @@ public class CheckoutController {
         CheckoutRequest customerRequest = new CheckoutRequest(account.getCustomer().getId(),
                 request.shippingAddress(), request.paymentMethod(), request.items(), phone, request.customerNote());
         synchronized (store) {
-            return checkoutLocked(customerRequest, true);
+            return checkoutLocked(customerRequest, true, servletRequest.getRemoteAddr());
         }
     }
 
     private Map<String, Object> checkoutLocked(CheckoutRequest request, boolean onlineOrder) {
+        return checkoutLocked(request, onlineOrder, "127.0.0.1");
+    }
+
+    private Map<String, Object> checkoutLocked(CheckoutRequest request, boolean onlineOrder, String clientIp) {
         if (request == null || request.customerId() == null || store.customers().findById(request.customerId()).isEmpty())
             throw bad("Vui lòng chọn khách hàng hợp lệ");
         if (request.items() == null || request.items().isEmpty() || request.items().size() > 50)
             throw bad("Đơn hàng cần có từ 1 đến 50 mặt hàng");
         String method = request.paymentMethod() == null ? "COD" : request.paymentMethod().trim().toUpperCase(Locale.ROOT);
         if (!METHODS.contains(method)) throw bad("Phương thức thanh toán không được hỗ trợ");
-        if (onlineOrder && !Set.of("COD", "BANK_TRANSFER").contains(method))
-            throw bad("Khách hàng chỉ có thể chọn thanh toán khi nhận hàng hoặc chuyển khoản");
+        if (onlineOrder && !Set.of("COD", "BANK_TRANSFER", "VNPAY").contains(method))
+            throw bad("Khách hàng chỉ có thể chọn COD, chuyển khoản hoặc VNPay");
+        if ("VNPAY".equals(method) && (!onlineOrder || !vnPay.isConfigured()))
+            throw bad("Thanh toán VNPay hiện chưa được cửa hàng cấu hình");
 
         // Validate the whole cart before changing stock, and merge duplicate product rows.
         Map<Long, Integer> quantities = new LinkedHashMap<>();
@@ -108,6 +119,7 @@ public class CheckoutController {
         order.setPaymentStatus(switch (method) {
             case "COD" -> "Thu tiền khi giao hàng";
             case "BANK_TRANSFER" -> "Chờ xác nhận chuyển khoản";
+            case "VNPAY" -> "Chờ thanh toán VNPay";
             default -> "Đã thanh toán (MÔ PHỎNG)";
         });
         order.setTotalAmount(BigDecimal.ZERO);
@@ -131,8 +143,10 @@ public class CheckoutController {
         }
         order.setTotalAmount(total);
         store.orders().save(order);
+        String paymentUrl = "VNPAY".equals(method) ? vnPay.createPaymentUrl(order, clientIp) : "";
         return Map.of("order", order, "items", store.detailsOfOrder(order.getId()),
-                "paymentNotice", method.endsWith("_DEMO") ? "Giao dịch thanh toán giả lập để trình diễn; không có tiền thật được thu." : "");
+                "paymentNotice", method.endsWith("_DEMO") ? "Giao dịch thanh toán giả lập để trình diễn; không có tiền thật được thu." : "",
+                "paymentUrl", paymentUrl);
     }
 
     private static ResponseStatusException bad(String message) {

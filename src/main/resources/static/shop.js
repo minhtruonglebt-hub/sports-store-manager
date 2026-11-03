@@ -4,7 +4,7 @@
   const loginForm = document.getElementById('loginForm');
   const registerForm = document.getElementById('registerForm');
   const productsElement = document.getElementById('products');
-  const cart = new Map();
+  const cart = loadSavedCart();
   let csrf = '';
   let products = [];
   let customerAuthenticated = false;
@@ -14,6 +14,31 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[character]);
   const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
+
+  function loadSavedCart() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('sportiva-customer-cart') || '[]');
+      if (!Array.isArray(saved)) throw new Error('Dữ liệu giỏ hàng không đúng định dạng.');
+      return new Map(saved.filter(item => Array.isArray(item) && item.length === 2
+        && Number.isSafeInteger(item[0]) && item[0] > 0
+        && Number.isSafeInteger(item[1]) && item[1] > 0 && item[1] <= 999));
+    } catch (error) {
+      document.getElementById('checkoutError').textContent =
+        `Không thể khôi phục giỏ hàng đã lưu: ${error.message || 'dữ liệu không hợp lệ'}`;
+      return new Map();
+    }
+  }
+
+  function saveCart() {
+    try {
+      localStorage.setItem('sportiva-customer-cart', JSON.stringify([...cart.entries()]));
+      return true;
+    } catch {
+      document.getElementById('checkoutError').textContent =
+        'Trình duyệt không lưu được giỏ hàng; giỏ chỉ còn đến khi bạn đóng trang.';
+      return false;
+    }
+  }
 
   async function loadCsrf() {
     const response = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
@@ -82,7 +107,20 @@
 
   async function loadProducts() {
     products = await api('/api/store/products');
+    let cartChanged = false;
+    for (const [id, quantity] of cart) {
+      const product = products.find(item => item.id === id);
+      if (!product || !product.quantity || product.quantity < 1) {
+        cart.delete(id);
+        cartChanged = true;
+      } else if (quantity > product.quantity) {
+        cart.set(id, product.quantity);
+        cartChanged = true;
+      }
+    }
+    if (cartChanged) saveCart();
     renderProducts();
+    renderCart();
   }
 
   function renderProducts() {
@@ -111,6 +149,7 @@
       return;
     }
     cart.set(id, quantity);
+    saveCart();
     document.getElementById('checkoutError').textContent = '';
     renderCart();
   }
@@ -132,6 +171,9 @@
       return sum + (product ? product.price * quantity : 0);
     }, 0);
     document.getElementById('total').textContent = money(total);
+    document.getElementById('cartCount').textContent = entries.reduce((sum, [, quantity]) => sum + quantity, 0);
+    document.getElementById('cartShortcut').setAttribute('aria-label',
+      `Đi đến giỏ hàng, ${entries.reduce((sum, [, quantity]) => sum + quantity, 0)} sản phẩm`);
   }
 
   function changeQuantity(id, amount) {
@@ -142,6 +184,7 @@
       if (product && quantity > product.quantity) return;
       cart.set(id, quantity);
     }
+    saveCart();
     renderCart();
   }
 
@@ -159,7 +202,7 @@
     orderList.innerHTML = orders.length ? orders.map(order => `<article class="order">
       <div class="order-head"><span>Đơn #${order.id} · ${escapeHtml(order.status)}</span><span>${money(order.totalAmount)}</span></div>
       <small>${new Date(order.orderDate).toLocaleString('vi-VN')} · ${escapeHtml(order.paymentStatus || '')}</small>
-      <small>Thanh toán: ${order.paymentMethod === 'BANK_TRANSFER' ? 'Chuyển khoản' : 'COD'}</small>
+      <small>Thanh toán: ${escapeHtml({ BANK_TRANSFER: 'Chuyển khoản', VNPAY: 'VNPay', COD: 'COD' }[order.paymentMethod] || order.paymentMethod || '—')}</small>
       <div class="order-items">${order.items.map(item => `${escapeHtml(item.productName)} × ${item.quantity} — ${money(item.subtotal)}`).join('<br>')}</div>
       <small>Giao đến: ${escapeHtml(order.shippingAddress || '—')} · SĐT: ${escapeHtml(order.customerPhone || '—')}</small>
       ${order.customerNote ? `<div class="order-items">Ghi chú: ${escapeHtml(order.customerNote)}</div>` : ''}
@@ -170,6 +213,7 @@
     paymentInfo = await api('/api/store/payment-info');
     const option = document.getElementById('bankTransferOption');
     const info = document.getElementById('bankTransferInfo');
+    const vnPayOption = document.getElementById('vnPayOption');
     option.disabled = !paymentInfo.bankTransferConfigured;
     option.textContent = paymentInfo.bankTransferConfigured
       ? 'Chuyển khoản ngân hàng'
@@ -179,6 +223,10 @@
     } else {
       info.textContent = 'Cửa hàng chưa cấu hình thông tin tài khoản ngân hàng. Vui lòng chọn COD hoặc liên hệ cửa hàng.';
     }
+    vnPayOption.disabled = !paymentInfo.vnPayConfigured;
+    vnPayOption.textContent = paymentInfo.vnPayConfigured
+      ? 'Thanh toán qua VNPay'
+      : 'VNPay (chưa được cửa hàng cấu hình)';
     info.hidden = document.getElementById('payment').value !== 'BANK_TRANSFER';
   }
 
@@ -193,6 +241,11 @@
     if (event.key === 'Escape' && !authScreen.hidden) authScreen.hidden = true;
   });
   document.getElementById('search').addEventListener('input', renderProducts);
+  document.getElementById('cartShortcut').addEventListener('click', () => {
+    const cartBox = document.getElementById('cartBox');
+    cartBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    cartBox.querySelector('h2').focus({ preventScroll: true });
+  });
   document.getElementById('payment').addEventListener('change', event => {
     document.getElementById('bankTransferInfo').hidden = event.target.value !== 'BANK_TRANSFER';
   });
@@ -275,7 +328,7 @@
       return;
     }
     try {
-      await api('/api/checkout/customer', {
+      const result = await api('/api/checkout/customer', {
         method: 'POST',
         body: JSON.stringify({
           shippingAddress,
@@ -286,7 +339,12 @@
         })
       });
       cart.clear();
+      saveCart();
       renderCart();
+      if (result.paymentUrl) {
+        window.location.assign(result.paymentUrl);
+        return;
+      }
       document.getElementById('customerNote').value = '';
       await Promise.all([loadProducts(), loadOrders()]);
       errorElement.textContent = document.getElementById('payment').value === 'BANK_TRANSFER'
@@ -333,6 +391,7 @@
   });
 
   async function init() {
+    const paymentResult = new URLSearchParams(window.location.search).get('payment');
     try {
       await loadCsrf();
       await loadPaymentInfo();
@@ -347,9 +406,17 @@
       if (error.status === 401) {
         showGuestStore();
         await loadProducts();
-        return;
+      } else {
+        productsElement.innerHTML = `<div class="empty">${escapeHtml(error.message || 'Không thể tải cửa hàng.')}</div>`;
       }
-      productsElement.innerHTML = `<div class="empty">${escapeHtml(error.message || 'Không thể tải cửa hàng.')}</div>`;
+    }
+    if (paymentResult === 'success' || paymentResult === 'failed') {
+      const message = document.getElementById('checkoutError');
+      message.textContent = paymentResult === 'success'
+        ? 'VNPay đã xác nhận thanh toán. Bạn có thể xem trạng thái đơn hàng bên dưới.'
+        : 'Thanh toán VNPay chưa thành công hoặc chưa được xác nhận. Kiểm tra đơn hàng hoặc liên hệ cửa hàng.';
+      message.style.color = paymentResult === 'success' ? 'var(--green)' : '#a33';
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     }
   }
 

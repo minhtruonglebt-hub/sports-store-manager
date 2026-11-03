@@ -1,2 +1,4 @@
 C:\sports-store-manager\src\test\java\vn\sportstore\controller\CheckoutAndSecurityIntegrationTest.java
 C:\sports-store-manager\src\test\java\vn\sportstore\controller\CustomerStoreIntegrationTest.java
+C:\sports-store-manager\src\test\java\vn\sportstore\controller\ProductPaginationIntegrationTest.java
+C:\sports-store-manager\src\test\java\vn\sportstore\service\VnPayPaymentIntegrationTest.java

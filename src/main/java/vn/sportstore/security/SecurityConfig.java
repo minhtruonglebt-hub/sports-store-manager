@@ -62,7 +62,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/", "/index.html", "/shop.html", "/shop.js", "/api/health",
                             "/api/auth/csrf", "/api/auth/login", "/api/auth/customer/register",
-                            "/api/store/products", "/api/store/payment-info").permitAll()
+                            "/api/store/products", "/api/store/payment-info",
+                            "/api/payments/vnpay/return", "/api/payments/vnpay/ipn").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/checkout/customer").hasRole("CUSTOMER")
                     .requestMatchers("/api/store/**").hasRole("CUSTOMER")
                     .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
