@@ -268,7 +268,8 @@
       });
       if (!info.roles.includes('CUSTOMER')) {
         await api('/api/auth/logout', { method: 'POST' });
-        window.location.replace('/');
+        document.getElementById('loginError').textContent =
+          'Tài khoản này không phải tài khoản khách hàng. Hãy đăng ký tài khoản khách hàng hoặc đăng nhập tại trang quản lý.';
         return;
       }
       loginForm.reset();
