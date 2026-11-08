@@ -149,3 +149,8 @@ td{padding:11px 18px;border-top:1px solid var(--line);color:var(--ink2);vertical
   .card-h{padding:14px}.top h1{font-size:22px}.order-acts select{margin-left:0;width:100%}.tiles{grid-template-columns:repeat(2,1fr);padding:12px}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* order detail */
+.od{padding:0 24px}.od-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.od-who{display:grid;gap:2px;font-size:13px;margin-bottom:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fafbf8}.od-who b{font-size:14px}
+.od .cart-sum{padding:12px 0}.od table{min-width:0}

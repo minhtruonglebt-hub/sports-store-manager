@@ -62,7 +62,8 @@ public class UserAccountService implements UserDetailsService {
     public UserView update(Long id, String password, String role, Boolean enabled) {
         UserAccount account = users.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
-        String normalizedRole = validateRole(role);
+        String normalizedRole = "CUSTOMER".equals(account.getRole()) && role != null && "CUSTOMER".equalsIgnoreCase(role.trim())
+                ? "CUSTOMER" : validateRole(role);
         if (enabled == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trạng thái tài khoản không hợp lệ");
         if (password != null && !password.isBlank()) {
             validatePassword(password);

@@ -17,6 +17,7 @@ export default function Home() {
   const [booting, setBooting] = useState(true);
   const [backend, setBackend] = useState("checking");
   const [page, setPage] = useState("dashboard");
+  useEffect(() => { const h = window.location.hash.slice(1); if (h && titles[h]) setPage(h); }, []);
   const [data, setData] = useState(emptyData);
   const [online, setOnline] = useState([]);
   const [metrics, setMetrics] = useState(null);
@@ -29,6 +30,7 @@ export default function Home() {
   const [stockProduct, setStockProduct] = useState(null);
   const [stockHistory, setStockHistory] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [viewOrder, setViewOrder] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const csrf = useRef("");
@@ -110,7 +112,7 @@ export default function Home() {
         await api("/api/auth/logout", { method: "POST" }).catch(() => {});
         throw new Error("Tài khoản này không có quyền vào trang quản trị.");
       }
-      setAccount(info); form.reset(); setPage("dashboard");
+      setAccount(info); form.reset(); setPage("dashboard"); try { window.history.replaceState(null, "", window.location.pathname); } catch {}
       await loadCsrf();
       await refreshData(info.roles.includes("ADMIN")); notify("Đăng nhập thành công");
     } catch (err) { setError(err.message || "Đăng nhập thất bại"); }
@@ -119,12 +121,12 @@ export default function Home() {
 
   async function logout() {
     try { await api("/api/auth/logout", { method: "POST" }); } catch { /* session may already be gone */ }
-    setAccount(null); setPage("dashboard"); setData(emptyData); setOnline([]); setMetrics(null); setRevenue([]); setError("");
+    setAccount(null); setPage("dashboard"); try { window.history.replaceState(null, "", window.location.pathname); } catch {} setData(emptyData); setOnline([]); setMetrics(null); setRevenue([]); setError("");
     try { await loadCsrf(); } catch { /* login fetches a fresh token */ }
   }
 
   const reload = () => refreshData(isAdmin);
-  const go = (key) => { setPage(key); setError(""); setMenuOpen(false); };
+  const go = (key) => { setPage(key); try { window.history.replaceState(null, "", `#${key}`); } catch {} setError(""); setMenuOpen(false); };
 
   async function run(task, okMessage) {
     setBusy(true); setError("");
@@ -166,7 +168,7 @@ export default function Home() {
           {error && <div className="banner bad" role="alert"><Icon name="alert" /><span>{error}</span><button onClick={() => setError("")} aria-label="Đóng"><Icon name="x" size={16} /></button></div>}
           {page === "dashboard" && <Dashboard data={data} metrics={metrics} revenue={revenue} loading={loading} online={online} go={go} />}
           {page === "checkout" && <Checkout data={data} api={api} busy={busy} setBusy={setBusy} notify={notify} setError={setError} reload={reload} />}
-          {page === "online" && <OnlineOrders orders={online} busy={busy} loading={loading}
+          {page === "online" && <OnlineOrders orders={online} onView={setViewOrder} busy={busy} loading={loading}
             onStatus={(o, status) => status === "Đã hủy"
               ? setConfirm({ title: `Hủy đơn #${o.id}?`, text: "Tồn kho sẽ được hoàn lại và đơn đã hủy không thể mở lại.", danger: true, ok: "Hủy đơn", action: () => run(() => api(`/api/orders/${o.id}/status`, { method: "PUT", body: JSON.stringify({ status }) }), `Đã hủy đơn #${o.id}`) })
               : run(() => api(`/api/orders/${o.id}/status`, { method: "PUT", body: JSON.stringify({ status }) }), `Đơn #${o.id} → ${status}`)}
@@ -174,7 +176,7 @@ export default function Home() {
           {resources[page] && <Table key={page} page={page} data={data} api={api} loading={loading} busy={busy} isAdmin={isAdmin} reloadTick={reloadTick}
             onAdd={() => openEditor(page)} onEdit={(row) => openEditor(page, row)}
             onDelete={(row) => setConfirm({ title: `Xóa ${resources[page].label.toLowerCase()}?`, text: "Thao tác này không thể hoàn tác.", danger: true, ok: "Xóa", action: () => run(() => api(`${resources[page].url}/${row.id}`, { method: "DELETE" }), "Đã xóa dữ liệu") })}
-            onStock={setStockProduct} onHistory={async (p) => { try { setStockHistory({ product: p, movements: await api(`/api/products/${p.id}/stock-movements`) }); } catch (e) { setError(e.message); } }}
+            onView={setViewOrder} onStock={setStockProduct} onHistory={async (p) => { try { setStockHistory({ product: p, movements: await api(`/api/products/${p.id}/stock-movements`) }); } catch (e) { setError(e.message); } }}
             onUpload={(p, file) => { const body = new FormData(); body.append("image", file); run(() => api(`/api/products/${p.id}/image`, { method: "POST", body }), `Đã tải ảnh cho ${p.name}`); }} />}
         </div>
       </section>
@@ -182,6 +184,7 @@ export default function Home() {
       {stockProduct && <StockModal product={stockProduct} busy={busy} error={error} onClose={() => { setStockProduct(null); setError(""); }} onSave={adjustStock} />}
       {stockHistory && <HistoryModal {...stockHistory} onClose={() => setStockHistory(null)} />}
       {confirm && <Confirm {...confirm} onClose={() => setConfirm(null)} />}
+      {viewOrder && <OrderModal order={viewOrder} data={data} onClose={() => setViewOrder(null)} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
@@ -266,7 +269,7 @@ function Dashboard({ data, metrics, revenue, loading, online, go }) {
 }
 
 /* ---------- Generic table ---------- */
-function Table({ page, data, api, loading, busy, isAdmin, reloadTick, onAdd, onEdit, onDelete, onStock, onHistory, onUpload }) {
+function Table({ page, data, api, loading, busy, isAdmin, reloadTick, onView, onAdd, onEdit, onDelete, onStock, onHistory, onUpload }) {
   const cfg = resources[page];
   const [query, setQuery] = useState(""); const [status, setStatus] = useState(""); const [cat, setCat] = useState("");
   const [min, setMin] = useState(""); const [max, setMax] = useState("");
@@ -292,7 +295,7 @@ function Table({ page, data, api, loading, busy, isAdmin, reloadTick, onAdd, onE
   const total = isProducts ? (remote?.total ?? 0) : local.length;
   const rows = isProducts ? (remote?.items ?? []) : local.slice(idx * size, (idx + 1) * size);
   const pages = Math.max(1, Math.ceil(total / size));
-  const canAct = isAdmin || isProducts;
+  const canAct = isAdmin || isProducts || page === "orders";
   const reset = (fn) => (e) => { fn(e.target.value); setIdx(0); };
   const filtering = query || status || cat || min || max;
 
@@ -313,6 +316,7 @@ function Table({ page, data, api, loading, busy, isAdmin, reloadTick, onAdd, onE
       <tbody>{loading && !rows.length ? <tr><td className="empty" colSpan={cfg.cols.length + 1}>Đang tải dữ liệu…</td></tr> : rows.length ? rows.map((r) => <tr key={r.id}>
         {cfg.cols.map(([k]) => <td key={k} data-label={cfg.cols.find((c) => c[0] === k)[1]}>{cell(k, r, page, data)}</td>)}
         {canAct && <td className="r"><div className="acts">
+          {page === "orders" && <button className="ib" title="Xem chi tiết / in hóa đơn" aria-label={`Xem đơn ${r.id}`} onClick={() => onView(r)}><Icon name="receipt" size={16} /></button>}
           {isProducts && <><button className="ib" title="Điều chỉnh tồn kho" aria-label={`Điều chỉnh tồn kho ${r.name}`} disabled={busy} onClick={() => onStock(r)}><Icon name="plusminus" size={16} /></button>
             <button className="ib" title="Lịch sử tồn kho" aria-label={`Lịch sử tồn kho ${r.name}`} disabled={busy} onClick={() => onHistory(r)}><Icon name="clock" size={16} /></button>
             {isAdmin && <label className="ib file" title="Tải ảnh sản phẩm"><Icon name="image" size={16} /><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(r, f); e.target.value = ""; }} /></label>}</>}
@@ -330,7 +334,7 @@ function cell(key, row, page, data) {
   if (key === "name" && page === "products") return <div className="pname"><span className="thumb">{row.imageUrl ? <img src={row.imageUrl} alt="" /> : <Icon name="box" size={16} />}</span><span><b>{row.name}</b><small>SKU-{String(row.id).padStart(4, "0")}{row.color ? ` · ${row.color}` : ""}</small></span></div>;
   if (key === "quantity" && page === "products") return <span className={isLow(row) ? "stock low" : "stock"}>{row.quantity}<small> / cảnh báo {row.minStock}</small></span>;
   if (key === "enabled") return <Badge tone={row.enabled ? "ok" : "mute"}>{row.enabled ? "Hoạt động" : "Đã khóa"}</Badge>;
-  if (key === "role") return row.role === "ADMIN" ? "Quản trị viên" : "Nhân viên";
+  if (key === "role") return { ADMIN: "Quản trị viên", STAFF: "Nhân viên", CUSTOMER: "Khách hàng" }[row.role] || row.role || "—";
   if (key === "categoryId") return data.categories.find((x) => x.id === row[key])?.name || `#${row[key] ?? "—"}`;
   if (key === "customerId") return data.customers.find((x) => x.id === row[key])?.fullName || `#${row[key] ?? "—"}`;
   if (key === "productId") return data.products.find((x) => x.id === row[key])?.name || `#${row[key] ?? "—"}`;
@@ -347,7 +351,7 @@ function StatusBadge({ value }) {
 }
 
 /* ---------- Online orders ---------- */
-function OnlineOrders({ orders, busy, loading, onStatus, onPay }) {
+function OnlineOrders({ orders, busy, loading, onView, onStatus, onPay }) {
   const [filter, setFilter] = useState("all");
   const counts = Object.fromEntries(orderStatuses.map((s) => [s, orders.filter((o) => o.status === s).length]));
   const list = orders.filter((o) => filter === "all" || o.status === filter);
@@ -363,6 +367,7 @@ function OnlineOrders({ orders, busy, loading, onStatus, onPay }) {
         <div className="pay"><small>{paymentLabels[o.paymentMethod] || o.paymentMethod}</small><Badge tone={paymentDone(o) ? "ok" : "warn"}>{o.paymentStatus}</Badge></div>
         <strong className="total">{money(o.totalAmount)}</strong>
         <div className="order-acts">
+          <button className="btn ghost" onClick={() => onView(o)}><Icon name="receipt" size={16} />Chi tiết / In</button>
           {canConfirmPayment(o) && <button className="btn ghost" disabled={busy} onClick={() => onPay(o)}><Icon name="check" size={16} />Xác nhận thanh toán</button>}
           {o.status !== "Đã hủy" && <select value={o.status} disabled={busy} aria-label={`Trạng thái đơn ${o.id}`} onChange={(e) => onStatus(o, e.target.value)}>{orderStatuses.map((s) => <option key={s}>{s}</option>)}</select>}
         </div>
@@ -429,7 +434,7 @@ function input(key, label, type, required, value, data, modal) {
   if (type === "textarea") return <textarea {...c} rows="3" maxLength={500} />;
   if (type === "productStatus") return <select {...c}><option>Đang bán</option><option>Ngừng bán</option></select>;
   if (type === "orderStatus") return <select {...c}>{orderStatuses.map((s) => <option key={s}>{s}</option>)}</select>;
-  if (type === "userRole") return <select {...c}><option value="STAFF">Nhân viên</option><option value="ADMIN">Quản trị viên</option></select>;
+  if (type === "userRole") return <select {...c}>{value === "CUSTOMER" && <option value="CUSTOMER">Khách hàng</option>}<option value="STAFF">Nhân viên</option><option value="ADMIN">Quản trị viên</option></select>;
   if (type === "enabled") return <select {...c} defaultValue={String(value ?? true)}><option value="true">Hoạt động</option><option value="false">Đã khóa</option></select>;
   const choices = { category: data.categories.map((x) => [x.id, x.name]), customer: data.customers.map((x) => [x.id, x.fullName]), product: data.products.map((x) => [x.id, x.name]), order: data.orders.map((x) => [x.id, `Đơn #${x.id}`]) }[type];
   if (choices) return <select {...c}><option value="">Chọn…</option>{choices.map(([id, t]) => <option value={id} key={id}>{t}</option>)}</select>;
@@ -449,4 +454,58 @@ function HistoryModal({ product, movements, onClose }) {
 }
 function Confirm({ title, text, ok, danger, action, onClose }) {
   return <Modal title={title} onClose={onClose}><p className="hint">{text}</p><footer><button className="btn ghost" onClick={onClose}>Quay lại</button><button className={`btn ${danger ? "danger" : "primary"}`} onClick={() => { onClose(); action(); }}>{ok}</button></footer></Modal>;
+}
+
+/* ---------- Order detail + invoice ---------- */
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+function orderView(order, data) {
+  const cust = data.customers.find((c) => c.id === order.customerId);
+  const items = Array.isArray(order.items) ? order.items.map((i) => ({ name: i.productName, sub: [i.brand, i.size].filter(Boolean).join(" · "), qty: i.quantity, price: i.unitPrice ?? (i.quantity ? Number(i.subtotal) / i.quantity : 0), subtotal: i.subtotal }))
+    : data.details.filter((d) => d.orderId === order.id).map((d) => { const p = data.products.find((x) => x.id === d.productId); return { name: p?.name || `Sản phẩm #${d.productId}`, sub: [p?.brand, p?.size].filter(Boolean).join(" · "), qty: d.quantity, price: d.unitPrice, subtotal: d.subtotal ?? Number(d.unitPrice) * d.quantity }; });
+  return {
+    id: order.id, date: fullDate(order.orderDate), status: order.status,
+    name: order.customerName || cust?.fullName || `#${order.customerId ?? "—"}`,
+    phone: order.customerPhone || cust?.phone || "—", email: order.customerEmail || cust?.email || "",
+    address: order.shippingAddress || cust?.address || "—", note: order.customerNote || "",
+    method: paymentLabels[order.paymentMethod] || order.paymentMethod || "—", payStatus: order.paymentStatus || "—",
+    items, total: order.totalAmount ?? items.reduce((s, i) => s + Number(i.subtotal || 0), 0),
+  };
+}
+
+function invoiceHtml(v) {
+  const rows = v.items.map((i, n) => `<tr><td>${n + 1}</td><td>${esc(i.name)}${i.sub ? `<br><small>${esc(i.sub)}</small>` : ""}</td><td class="r">${i.qty}</td><td class="r">${esc(money(i.price))}</td><td class="r">${esc(money(i.subtotal))}</td></tr>`).join("");
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Hóa đơn #${v.id}</title><style>
+  body{font:13px/1.5 Arial,sans-serif;color:#111;margin:32px}h1{margin:0;font-size:22px;letter-spacing:.08em}.sub{color:#666}.row{display:flex;justify-content:space-between;gap:24px;margin:18px 0}
+  table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{background:#f3f3f3;font-size:11px;text-transform:uppercase}.r{text-align:right}small{color:#666}
+  .total{text-align:right;font-size:18px;font-weight:700;margin-top:14px}.foot{margin-top:36px;text-align:center;color:#666;font-size:12px}</style></head><body>
+  <div class="row"><div><h1>SPORTIVA</h1><div class="sub">Cửa hàng thể thao</div></div><div style="text-align:right"><b>HÓA ĐƠN #${v.id}</b><div class="sub">${esc(v.date)}</div></div></div>
+  <div class="row"><div><b>Khách hàng</b><br>${esc(v.name)}<br>${esc(v.phone)}${v.email ? `<br>${esc(v.email)}` : ""}<br>${esc(v.address)}</div>
+  <div style="text-align:right"><b>Thanh toán</b><br>${esc(v.method)}<br>${esc(v.payStatus)}</div></div>
+  <table><thead><tr><th>#</th><th>Sản phẩm</th><th class="r">SL</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="total">Tổng cộng: ${esc(money(v.total))}</div>${v.note ? `<p><b>Ghi chú:</b> ${esc(v.note)}</p>` : ""}
+  <div class="foot">Cảm ơn quý khách đã mua hàng!</div></body></html>`;
+}
+
+function printInvoice(v) {
+  const f = document.createElement("iframe");
+  f.setAttribute("aria-hidden", "true"); f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(f);
+  const w = f.contentWindow; w.document.open(); w.document.write(invoiceHtml(v)); w.document.close();
+  setTimeout(() => { w.focus(); w.print(); setTimeout(() => f.remove(), 1500); }, 250);
+}
+
+function OrderModal({ order, data, onClose }) {
+  const v = orderView(order, data);
+  return <Modal wide eyebrow={v.date} title={`Đơn hàng #${v.id}`} onClose={onClose}>
+    <div className="od">
+      <div className="od-top"><StatusBadge value={v.status} /><Badge tone={paymentDone(order) ? "ok" : "warn"}>{v.payStatus}</Badge><span className="muted">{v.method}</span></div>
+      <div className="od-who"><b>{v.name}</b><span>{v.phone}</span>{v.email && <span>{v.email}</span>}<span className="muted">{v.address}</span>{v.note && <p className="note">“{v.note}”</p>}</div>
+      <div className="scroll"><table><thead><tr><th>Sản phẩm</th><th className="r">SL</th><th className="r">Đơn giá</th><th className="r">Thành tiền</th></tr></thead><tbody>
+        {v.items.length ? v.items.map((i, n) => <tr key={n}><td><b>{i.name}</b>{i.sub && <small className="muted"> {i.sub}</small>}</td><td className="r">{i.qty}</td><td className="r">{money(i.price)}</td><td className="r">{money(i.subtotal)}</td></tr>) : <tr><td className="empty" colSpan="4">Đơn này chưa có sản phẩm.</td></tr>}
+      </tbody></table></div>
+      <div className="cart-sum"><span>Tổng cộng</span><strong>{money(v.total)}</strong></div>
+    </div>
+    <footer><button type="button" className="btn ghost" onClick={onClose}>Đóng</button><button type="button" className="btn primary" onClick={() => printInvoice(v)}><Icon name="receipt" size={16} />In hóa đơn</button></footer>
+  </Modal>;
 }
